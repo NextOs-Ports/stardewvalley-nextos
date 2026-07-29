@@ -38,6 +38,12 @@ Portuguese localisation. Bottom row: **R36S / ArkOS** (RK3326, Mali-G31, KMSDRM)
 
 ---
 
+## Community
+
+Questions, bug reports, help getting the port running, and news about the next ones:
+
+💬 **Discord:** [discord.gg/DHfY62eDNN](https://discord.gg/DHfY62eDNN)
+
 ## English
 
 ### Status
