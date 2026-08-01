@@ -1,6 +1,6 @@
 # Stardew Valley (Android) — so-loader port — HANDOFF
 
-**Status em 2026-08-01:** release universal v1.1.0 fechada e validada no aparelho
+**Status em 2026-08-01:** release universal v1.1.1 fechada e validada no aparelho
 ArkOS/RK3326/Mali-G31, além da bancada original Amlogic/Mali-450. `Runtime_init`,
 ativação Xamarin, lifecycle nativo, GLES, OpenAL, controles, criação de personagem,
 save e gameplay funcionam. O teste atual carregou um save real, percorreu a lista
@@ -17,9 +17,12 @@ binário por `SELECT+START -> _exit(0)`.
 Os dados proprietários são BYO-data. NXExtract 1.1.2 aceita APK/APKM/APKS/XAPK/ZIP,
 valida a árvore exata e confirma `libs`/`assets` transacionalmente. O hook portátil
 Python 3.7+ migra tanto o store original quanto os patches públicos anteriores para
-o hash final, sem tocar nos saves. O pacote público é montado por allowlist,
-reprodutível e auditado contra dados de jogo, logs, caminhos pessoais e procedência
-de build inválida.
+o hash final, sem tocar nos saves. Desde v1.1.1, o hook carrega primeiro a
+`tools/liblz4.so.1` AArch64 auditada do Debian Buster (SHA-256
+`a65c53e2e7015b636e4f212449eff2016b99736cdf5798fe2cf3672818b88b8b`, GLIBC máx.
+2.17), eliminando a dependência opcional ausente no ROCKNIX/RG-DS. O pacote público
+é montado por allowlist, reprodutível e auditado contra dados de jogo, logs,
+caminhos pessoais e procedência de build inválida.
 
 O restante deste documento preserva o histórico do bootstrap e deve ser lido como
 diagnóstico antigo, não como descrição do estado atual.
@@ -52,14 +55,19 @@ diagnóstico antigo, não como descrição do estado atual.
   limitado da própria página. Todos os demais botões e menus preservam byte por
   byte a lógica original. O caminho foi confirmado no runtime Android/MonoGame,
   que entrega `Buttons.DPadUp/DPadDown` e não eventos `Keys`.
+- `Options.singlePlayerBaseZoomLevel` é serializado por save. Por isso o save antigo
+  testado mantinha o enquadramento bom enquanto uma fazenda nova começava em 1,0. O
+  patch v1.1.1 muda somente os defaults de um objeto novo para 0,75 (mínimo suportado
+  pelo jogo); preferências carregadas continuam sobrescrevendo o default.
 - No port offline, `NewDaySynchronizer.readyForSave` confirma apenas a barreira
   de rede que ficava presa sem backend. O fake `Java.IO.File.get_UsableSpace`
   devolve o `statvfs` real; antes retornava zero e simulava disco cheio. O fluxo
   normal chegou a `Save in Progress`, escreveu os dois XMLs e entrou na fazenda.
-- O analógico direito controla um crosshair nativo separado do foco do jogo. Ele
+- O analógico direito controla uma seta pixel-art nativa separada do foco do jogo. Ela
   usa deadzone radial/aceleração, some após 2 s e R3 envia `MotionEvent`
-  `DOWN/MOVE/UP` ao `AndroidTouchEventManager`; R3 continua sendo o botão nativo
-  quando o crosshair está oculto. `SDV_RIGHT_CURSOR=0` desliga o recurso.
+  `DOWN/MOVE/UP` ao `AndroidTouchEventManager` usando a ponta superior esquerda como
+  hotspot; R3 continua sendo o botão nativo quando o cursor está oculto.
+  `SDV_RIGHT_CURSOR=0` desliga o recurso.
 - Limpeza pós-gameplay: logs por tecla ficaram opt-in (`SDV_INPUT_TRACE=1`),
   `debugPrintf` não duplica mais gravações, `sem_timedwait` converte corretamente
   deadline absoluto para futex relativo e o loader serializa cargas Bionic,

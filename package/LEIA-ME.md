@@ -1,4 +1,4 @@
-# Stardew Valley v1.1.0 (NextOS) — como instalar
+# Stardew Valley v1.1.1 (NextOS) — como instalar
 
 Port do **Stardew Valley de Android** rodando direto no Linux do seu portátil, por um
 so-loader próprio: sem Android, sem emulador, sem container.
@@ -50,6 +50,10 @@ origem para liberar espaço.
 Quem já usava o v1.0 pode instalar por cima: o novo preparador migra o assembly store e
 adota os dados existentes sem apagar ou reescrever os saves.
 
+Se a v1.1.0 parou em 65% no ROCKNIX com erro de `liblz4.so`, instale esta versão por
+cima e abra de novo. Os 394 MB já validados são retomados; a v1.1.1 leva seu próprio LZ4
+AArch64 compatível com GLIBC 2.17.
+
 **Sair do jogo: SELECT + START.**
 
 ---
@@ -67,7 +71,8 @@ compatibilidade externa com GLIBC máx. 2.17 no artefato desta release.
 
 Nesta versão, clicar em Nome/Fazenda/Coisa Favorita limpa automaticamente apenas o texto
 vermelho de dica e abre o teclado interno. A última aba das Opções também rola inteira
-com o D-pad; o cursor do analógico direito continua disponível.
+com o D-pad. O analógico direito ganhou uma seta pixel-art, e fazendas novas começam no
+zoom 0,75 sem alterar a preferência de saves antigos.
 
 ---
 

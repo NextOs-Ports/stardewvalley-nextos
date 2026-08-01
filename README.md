@@ -23,6 +23,22 @@ minutes). APK, APKM, APKS, XAPK and bundle ZIP inputs are accepted.
 
 **Exit the game: SELECT + START.**
 
+## v1.1.1 — new-farm zoom, arrow cursor and ROCKNIX setup
+
+- A brand-new farm now starts at the game's supported 0.75 zoom default. Existing
+  saves keep their own serialized zoom preference byte for byte.
+- The right-stick crosshair is now a crisp Stardew-coloured pixel-art arrow. Its
+  top-left tip remains the exact R3 touch hotspot.
+- The NXExtract hook now ships its own audited AArch64 LZ4 runtime (GLIBC 2.17), fixing
+  the 65% `prepare-managed-runtime` failure on ROCKNIX systems without `liblz4.so`.
+- Original data and every earlier public assembly patch migrate to the same verified
+  result; failed or interrupted setup remains resumable and never touches saves.
+
+**Em português:** fazendas novas agora começam no zoom 0,75 sem mudar a preferência de
+saves antigos; o cursor virou uma seta pixel-art; e o preparador leva seu próprio LZ4
+AArch64, eliminando a dependência que faltava no ROCKNIX. A atualização reaproveita os
+dados já extraídos e preserva os saves.
+
 ## v1.1.0 — controller and universal-device release
 
 - Character fields now always open the game's internal keyboard. Clicking a fresh
@@ -135,6 +151,8 @@ runtime.
 | flicker/tearing | swap interval set before the context existed | `SDL_GL_SetSwapInterval(1)` once the context is current |
 | game closed at "Saving…" on other devices | `getFilesDir` hardcoded to one device path | everything derives from `/proc/self/exe` (`$HOME` is no anchor — Mono rewrites it in `Runtime_init`) |
 | phone-sized zoom (~13 tiles) | the fake `DisplayMetrics` reported a fixed 160 dpi | `MobileDisplay`'s real curve measured on hardware; dpi computed to pin the framing in tiles (`SDV_TILES_X`, default 15) |
+| a new farm looked closer than an existing save | Android stores the player's zoom per save, while a fresh `Options` object started at 1.0 | set only the new/default single-player value to the supported 0.75 minimum; loaded saves still overwrite it with their stored value |
+| ROCKNIX setup failed at 65% | the managed-store hook assumed the optional system `liblz4.so` existed | bundle an audited AArch64 LZ4 runtime requiring only GLIBC 2.17 and load it before any system fallback |
 
 ### Controls
 
@@ -142,9 +160,9 @@ runtime.
 - In long menus such as the final Options tab, D-pad navigation scrolls the
   page natively and respects its top and bottom limits.
 - A/B/X/Y, L1/R1/L2/R2, Start and Select follow the SDL GameController mapping.
-- **Right stick**: independent native crosshair cursor (radial deadzone + acceleration,
+- **Right stick**: independent native pixel-art arrow cursor (radial deadzone + acceleration,
   auto-hides after 2 s). Does not steal the game's native focus.
-- **R3**: sends a real Android touch while the crosshair is visible; acts as a normal
+- **R3**: sends a real Android touch at the arrow tip while the cursor is visible; acts as a normal
   native button while it is hidden.
 - **SELECT+START**: immediate exit inside the binary (`_exit(0)`) — no Mono/GL shutdown
   hangs.
@@ -162,13 +180,16 @@ Put the package inside `ports/sdvnextos/gamedata/` and launch. NXExtract 1.1.2 a
 APK, APKM, APKS, XAPK and bundle ZIP files, resolves the arm64 split when necessary,
 validates the exact package payload and then commits `libs/` and `assets/` as one
 recoverable transaction. On later launches its marker and checkpoints provide a fast
-path; you may remove the source package after setup succeeds.
+path; you may remove the source package after setup succeeds. The outer filename and
+APK/XAPK SHA may differ between legitimate stores and split containers: acceptance is
+based on the exact inner package, ABI and payload. A genuinely different game assembly
+is accepted only after its hash and patch layout have been audited.
 
 The assembly store `libassemblies.arm64-v8a.blob.so` receives small local patches
-(controller keyboard, placeholder handling, native Options scrolling and the offline
-save barrier) — `tools/prepare_stardew_data.py` applies and verifies them on *your* copy.
-Existing v1.0 data is migrated in place before NXExtract adopts it. Assets and saves are
-never part of Git or the public ZIP.
+(controller keyboard, placeholder handling, native Options scrolling, new-farm zoom and
+the offline save barrier) — `tools/prepare_stardew_data.py` applies and verifies them on
+*your* copy. Existing v1.0 and v1.1.0 data is migrated in place before NXExtract adopts
+it. Assets and saves are never part of Git or the public ZIP.
 
 ### Troubleshooting
 
@@ -184,6 +205,8 @@ that matters is:
 already refuses that context, but the log confirms it.
 **No sound** → the game plays through OpenAL; backend order lives in `alsoft.conf`
 (`pipewire`, `pulse`, `alsa`). Force one with `AUDIO_DRIVER=alsa` or `AUDIO_DRIVER=pulse`.
+**NXExtract stopped at 65% on an older package** → install v1.1.1 over it and launch
+again. The validated stage is resumed and the bundled LZ4 runtime completes the hook.
 **Camera too close/far** → `SDV_TILES_X=15` controls the framing (screen width in tiles).
 
 For a one-shot developer capture of the actual GPU backbuffer, create
@@ -204,6 +227,8 @@ All knobs are environment variables, off by default; the full list is in
 - `package/` — the deterministic release ZIP builder, allowlist and public-data audit.
 - `tools/prepare_stardew_data.py` — portable Python 3.7+ assembly-store migration used
   on the device; `tools/PatchStardewOsk.cs` is its Cecil-based developer counterpart.
+- `tools/liblz4.so.1`, `LZ4-PROVENANCE.md` and `licenses/` — audited GLIBC 2.17
+  AArch64 setup dependency and its redistribution terms; no firmware package required.
 - `.build-provenance/` and `tools/build_provenance.py` — reproducible source/toolchain
   records checked before packaging.
 - `HANDOFF.md` — the full engineering log of the Mono/Xamarin bootstrap and every wall
@@ -215,7 +240,7 @@ All knobs are environment variables, off by default; the full list is in
 ### Build
 
 ```bash
-./build.sh                         # current NextOS sysroot -> stardewvalley
+bash ./build.sh                    # current NextOS sysroot -> stardewvalley
 
 SR=<current NextOS aarch64 sysroot>
 docker run --rm -v "$PWD":/repo -v "$SR":/nxsr:ro \
@@ -233,9 +258,10 @@ ZIP.
 
 The port code in this repository is © NextOS and distributed under the
 **GNU GPL-3.0** (see [`LICENSE`](LICENSE)) — anyone may use, study, modify and
-redistribute it under the same terms. Stardew Valley, its engine assemblies and every
-asset remain the property of ConcernedApe / Chucklefish and are supplied only by the
-user, from their own legal copy.
+redistribute it under the same terms. The bundled LZ4 runtime is redistributed under
+the BSD 2-Clause licence in `licenses/LZ4-BSD-2-Clause.txt`. Stardew Valley, its engine
+assemblies and every asset remain the property of ConcernedApe / Chucklefish and are
+supplied only by the user, from their own legal copy.
 
 ### Support this work
 
@@ -313,6 +339,8 @@ de GLES, formato do backbuffer e backend de áudio são todos negociados em runt
 | flicker/tearing | swap interval setado antes do contexto existir | `SDL_GL_SetSwapInterval(1)` com o contexto atual |
 | jogo fechava no "Salvando…" em outro aparelho | `getFilesDir` cravado no caminho de um device | tudo passa a sair de `/proc/self/exe` (`$HOME` não serve de âncora — o Mono o reescreve no `Runtime_init`) |
 | zoom de celular (~13 tiles) | o `DisplayMetrics` fake reportava 160 dpi fixo | curva real do `MobileDisplay` medida no aparelho; dpi calculado pra fixar o enquadramento em tiles (`SDV_TILES_X`, padrão 15) |
+| fazenda nova aparecia mais perto que um save antigo | o Android serializa o zoom por save, mas um objeto `Options` novo começava em 1,0 | mudar somente o padrão novo/single-player para o mínimo suportado 0,75; saves carregados continuam sobrescrevendo com sua preferência |
+| instalação ROCKNIX falhava em 65% | o hook do assembly presumia que a `liblz4.so` opcional existia no sistema | levar um runtime LZ4 AArch64 auditado, dependente só de GLIBC 2.17, e usá-lo antes de qualquer fallback do sistema |
 
 ### Controles
 
@@ -320,9 +348,9 @@ de GLES, formato do backbuffer e backend de áudio são todos negociados em runt
 - Em menus longos, como a última aba das Opções, o D-pad rola a página
   nativamente e respeitam os limites superior e inferior.
 - A/B/X/Y, L1/R1/L2/R2, Start e Select seguem o mapeamento SDL GameController.
-- **Analógico direito**: cursor crosshair nativo independente (deadzone radial +
+- **Analógico direito**: cursor de seta pixel-art nativo e independente (deadzone radial +
   aceleração, some sozinho após 2 s). Não rouba o foco nativo do jogo.
-- **R3**: envia toque Android real enquanto o crosshair está visível; é botão nativo
+- **R3**: envia toque Android real na ponta da seta enquanto o cursor está visível; é botão nativo
   normal quando ele está oculto.
 - **SELECT+START**: saída imediata no binário (`_exit(0)`) — sem travas de shutdown
   Mono/GL.
@@ -340,13 +368,16 @@ Ponha o pacote em `ports/sdvnextos/gamedata/` e abra. O NXExtract 1.1.2 aceita A
 APKM, APKS, XAPK e ZIP de bundle, resolve o split arm64 quando necessário, valida o
 conteúdo exato do pacote e só então confirma `libs/` e `assets/` numa transação
 recuperável. Nas próximas aberturas, marcador e checkpoints dão o caminho rápido; depois
-de uma instalação bem-sucedida, você pode remover o pacote de origem.
+de uma instalação bem-sucedida, você pode remover o pacote de origem. Nome e SHA externo
+do APK/XAPK podem variar entre lojas legítimas e bundles split: a decisão usa pacote,
+ABI e payload internos exatos. Um assembly realmente diferente só entra depois de
+auditar seu hash e o layout dos patches.
 
 O assembly store `libassemblies.arm64-v8a.blob.so` recebe pequenos patches locais
-(teclado no controle, placeholders, rolagem nativa das Opções e barreira de save
-offline) — `tools/prepare_stardew_data.py` aplica e verifica tudo na *sua* cópia. Dados
-do v1.0 são migrados antes de o NXExtract adotá-los. Assets e saves nunca entram no Git
-nem no ZIP público.
+(teclado no controle, placeholders, rolagem nativa das Opções, zoom de fazenda nova e
+barreira de save offline) — `tools/prepare_stardew_data.py` aplica e verifica tudo na
+*sua* cópia. Dados do v1.0 e v1.1.0 são migrados antes de o NXExtract adotá-los. Assets
+e saves nunca entram no Git nem no ZIP público.
 
 ### Se algo não funcionar
 
@@ -362,6 +393,8 @@ entregou OpenGL de PC e os shaders não compilam; o binário já rejeita esse co
 o log confirma.
 **Sem som** → o jogo toca por OpenAL; a ordem de backends está no `alsoft.conf`
 (`pipewire`, `pulse`, `alsa`). Force um com `AUDIO_DRIVER=alsa` ou `AUDIO_DRIVER=pulse`.
+**NXExtract parou em 65% com um pacote antigo** → instale a v1.1.1 por cima e abra de
+novo. O stage validado é retomado e o LZ4 incluído termina o hook.
 **Câmera muito perto ou muito longe** → `SDV_TILES_X=15` controla o enquadramento
 (largura da tela em tiles).
 
@@ -382,6 +415,8 @@ em [`INSTALAR.md`](INSTALAR.md).
 - `package/` — montador determinístico do ZIP, allowlist e auditoria de dados públicos.
 - `tools/prepare_stardew_data.py` — migração portátil Python 3.7+ usada no aparelho;
   `tools/PatchStardewOsk.cs` é a contraparte de desenvolvimento baseada no Cecil.
+- `tools/liblz4.so.1`, `LZ4-PROVENANCE.md` e `licenses/` — dependência AArch64
+  auditada para instalação em GLIBC 2.17, sem exigir pacote extra do firmware.
 - `.build-provenance/` e `tools/build_provenance.py` — registros reproduzíveis de fonte
   e toolchain conferidos antes do empacotamento.
 - `HANDOFF.md` — o log de engenharia completo do bootstrap Mono/Xamarin e de cada muro
@@ -393,7 +428,7 @@ em [`INSTALAR.md`](INSTALAR.md).
 ### Compilar
 
 ```bash
-./build.sh                         # sysroot NextOS atual -> stardewvalley
+bash ./build.sh                    # sysroot NextOS atual -> stardewvalley
 
 SR=<sysroot NextOS aarch64 atual>
 docker run --rm -v "$PWD":/repo -v "$SR":/nxsr:ro \
@@ -410,9 +445,10 @@ da fonte, compilador/sysroot, arquitetura AArch64 e limites de GLIBC.
 
 O código do port neste repositório é © NextOS e distribuído sob a **GNU GPL-3.0** (veja
 [`LICENSE`](LICENSE)) — qualquer um pode usar, estudar, modificar e redistribuir nos
-mesmos termos. Stardew Valley, seus assemblies e todos os assets continuam sendo da
-ConcernedApe / Chucklefish e são fornecidos apenas pelo usuário, da sua própria cópia
-legal.
+mesmos termos. O runtime LZ4 incluído usa BSD 2-Clause, reproduzida em
+`licenses/LZ4-BSD-2-Clause.txt`. Stardew Valley, seus assemblies e todos os assets
+continuam sendo da ConcernedApe / Chucklefish e são fornecidos apenas pelo usuário, da
+sua própria cópia legal.
 
 ### Apoie este trabalho
 

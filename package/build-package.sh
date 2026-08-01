@@ -17,7 +17,7 @@ SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1785542400}
 OUTPUT=${1:-"$SCRIPT_DIR/dist/stardewvalley.zip"}
 RELEASE=$(tr -d '\r\n' < "$PORT_DIR/version.txt")
 
-for tool in bash cmp comm find grep install mktemp python3 readelf rm \
+for tool in bash cmp comm cut find grep install mktemp python3 readelf rm \
             sed sha256sum sort touch unzip zip; do
   command -v "$tool" >/dev/null 2>&1 || fail "missing host tool: $tool"
 done
@@ -70,8 +70,14 @@ put 0755 "$PORT_DIR/nxextract.py" "ports/sdvnextos/nxextract.py"
 put 0755 "$PORT_DIR/nxextract-ui" "ports/sdvnextos/nxextract-ui"
 put 0755 "$PORT_DIR/tools/prepare_stardew_data.py" \
   "ports/sdvnextos/tools/prepare_stardew_data.py"
+put 0644 "$PORT_DIR/tools/liblz4.so.1" \
+  "ports/sdvnextos/tools/liblz4.so.1"
 put 0644 "$PORT_DIR/gamedata/README.txt" \
   "ports/sdvnextos/gamedata/README.txt"
+put 0644 "$PORT_DIR/LZ4-PROVENANCE.md" \
+  "ports/sdvnextos/LZ4-PROVENANCE.md"
+put 0644 "$PORT_DIR/licenses/LZ4-BSD-2-Clause.txt" \
+  "ports/sdvnextos/licenses/LZ4-BSD-2-Clause.txt"
 put 0644 "$PORT_DIR/licenses/NXExtract-MIT.txt" \
   "ports/sdvnextos/licenses/NXExtract-MIT.txt"
 put 0644 "$PORT_DIR/LICENSE" "ports/sdvnextos/LICENSE"
@@ -107,6 +113,11 @@ readelf --version-info "$STAGE/ports/sdvnextos/stardewvalley" |
 check_aarch64_glibc_ceiling \
   "$STAGE/ports/sdvnextos/stardewvalley.multi" 2.30
 check_aarch64_glibc_ceiling "$STAGE/ports/sdvnextos/nxextract-ui" 2.30
+check_aarch64_glibc_ceiling \
+  "$STAGE/ports/sdvnextos/tools/liblz4.so.1" 2.17
+[ "$(sha256sum "$STAGE/ports/sdvnextos/tools/liblz4.so.1" | cut -d' ' -f1)" = \
+  "a65c53e2e7015b636e4f212449eff2016b99736cdf5798fe2cf3672818b88b8b" ] ||
+  fail "bundled liblz4 does not match the audited Debian arm64 artifact"
 
 bash -n "$STAGE/ports/$LAUNCHER"
 bash -n "$STAGE/ports_scripts/$LAUNCHER"

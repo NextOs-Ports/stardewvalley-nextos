@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Mono.Cecil;
+using Mono.Cecil.Cil;
 
 // Apply the small offline/controller fixes required by the NextOS loader
 // without running a general-purpose assembly writer. Rewriting the DLL would
@@ -120,6 +121,36 @@ internal static class PatchStardewOsk
         Array.Clear(image, codeOffset, codeSize);
         image[codeOffset] = 0x17;     // ldc.i4.1
         image[codeOffset + 1] = 0x2a; // ret
+    }
+
+    private static void PatchFloatDefaultBeforeField(byte[] image,
+                                                      MethodDefinition method,
+                                                      FieldDefinition field,
+                                                      float oldValue,
+                                                      float newValue)
+    {
+        if (!method.HasBody || method.Body.HasExceptionHandlers)
+            throw new InvalidOperationException(
+                method.FullName + " has an unexpected body");
+        Instruction store = method.Body.Instructions.Single(instruction =>
+            instruction.OpCode.Code == Mono.Cecil.Cil.Code.Stfld &&
+            instruction.Operand is FieldReference &&
+            ((FieldReference)instruction.Operand).MetadataToken ==
+                field.MetadataToken &&
+            instruction.Previous != null &&
+            instruction.Previous.OpCode.Code == Mono.Cecil.Cil.Code.Ldc_R4 &&
+            Math.Abs((float)instruction.Previous.Operand - oldValue) < 0.0001f);
+        Instruction load = store.Previous;
+        int codeSize;
+        int codeOffset = GetCodeOffset(image, method, out codeSize);
+        int diskOffset = codeOffset + load.Offset;
+        if (diskOffset + 5 > codeOffset + codeSize || image[diskOffset] != 0x22 ||
+            Math.Abs(BitConverter.ToSingle(image, diskOffset + 1) - oldValue) >=
+                0.0001f)
+            throw new InvalidOperationException(
+                method.FullName + " zoom default precondition failed");
+        Buffer.BlockCopy(BitConverter.GetBytes(newValue), 0, image,
+                         diskOffset + 1, 4);
     }
 
     private static int ReadIndex(byte[] image, ref int offset, int size)
@@ -404,6 +435,7 @@ internal static class PatchStardewOsk
         TypeDefinition textBox = module.GetType("StardewValley.Menus.TextBox");
         TypeDefinition game1 = module.GetType("StardewValley.Game1");
         TypeDefinition newDaySync = module.GetType("StardewValley.NewDaySynchronizer");
+        TypeDefinition options = module.GetType("StardewValley.Options");
         MethodDefinition androidKeyboard = textBox.Methods.Single(method =>
             method.Name == "ShowAndroidKeyboard" && method.Parameters.Count == 0);
         MethodDefinition showTextEntry = game1.Methods.Single(method =>
@@ -417,6 +449,14 @@ internal static class PatchStardewOsk
             method.Name == "get_TitleText" && method.Parameters.Count == 0);
         MethodDefinition setText = textBox.Methods.Single(method =>
             method.Name == "set_Text" && method.Parameters.Count == 1);
+        MethodDefinition optionsConstructor = options.Methods.Single(method =>
+            method.Name == ".ctor" && method.Parameters.Count == 0);
+        MethodDefinition setOptionsToDefaults = options.Methods.Single(method =>
+            method.Name == "setToDefaults" && method.Parameters.Count == 0);
+        FieldDefinition baseZoomLevel = options.Fields.Single(field =>
+            field.Name == "baseZoomLevel");
+        FieldDefinition singlePlayerBaseZoomLevel = options.Fields.Single(field =>
+            field.Name == "singlePlayerBaseZoomLevel");
         MethodReference stringEquals = module.GetMemberReferences()
             .OfType<MethodReference>().First(method =>
                 method.DeclaringType.FullName == "System.String" &&
@@ -465,11 +505,20 @@ internal static class PatchStardewOsk
         // an offline first save. NextOS has no online multiplayer backend, so
         // the offline port can acknowledge that barrier immediately.
         ReplaceBodyWithTrue(image, readyForSave);
+        // Options are serialized inside each save. Existing saves overwrite
+        // singlePlayerBaseZoomLevel during XML load, but a brand-new farm kept
+        // the Android default 1.0 and therefore looked much closer than the
+        // already-tuned test save. Use the game's supported minimum (0.75) as
+        // the constructor/default only; never overwrite a stored preference.
+        PatchFloatDefaultBeforeField(image, optionsConstructor,
+                                     singlePlayerBaseZoomLevel, 1.0f, 0.75f);
+        PatchFloatDefaultBeforeField(image, setOptionsToDefaults,
+                                     baseZoomLevel, 1.0f, 0.75f);
         int optionsRva = PatchOptionsControllerScroll(image, module, codeCave);
 
         File.WriteAllBytes(args[1], image);
         Console.WriteLine(
-            "patched OSK RVA 0x{0:x}, offline save RVA 0x{1:x}, options gamepad RVA 0x{2:x}",
+            "patched OSK RVA 0x{0:x}, offline save RVA 0x{1:x}, options gamepad RVA 0x{2:x}, new-game zoom 0.75",
             androidKeyboard.RVA, readyForSave.RVA, optionsRva);
         return 0;
     }

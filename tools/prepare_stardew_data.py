@@ -24,6 +24,9 @@ STORE_RELATIVE = os.path.join("libs", "libassemblies.arm64-v8a.blob.so")
 DATA_MARKER = ".stardew-data.json"
 PACKAGE = "com.chucklefish.stardewvalley"
 GAME_VERSION = "1.6.15.3"
+BUNDLED_LZ4_SHA256 = (
+    "a65c53e2e7015b636e4f212449eff2016b99736cdf5798fe2cf3672818b88b8b"
+)
 
 ORIGINAL_ASSEMBLY_SHA256 = (
     "09a67870cbc4a31fa255b534012f3f55809725c5588892c2431eadfcd71cfbee"
@@ -34,8 +37,11 @@ LEGACY_PATCHED_ASSEMBLY_SHA256 = (
 CONTROLLER_V1_ASSEMBLY_SHA256 = (
     "d71f7a1f44f3ad9874277f59c5ff0432c73b22d178ae966d491a622f2daf8586"
 )
-FINAL_ASSEMBLY_SHA256 = (
+PREVIOUS_FINAL_ASSEMBLY_SHA256 = (
     "d7749b430a36df08c353d3acae2d532070e771caa9baf43e6df08d07f0ffe417"
+)
+FINAL_ASSEMBLY_SHA256 = (
+    "484633c3a22a72b25be9f6cff603ed67a7f7f154f9ce3b7a36df94792eaccd8b"
 )
 
 XABA_MAGIC = b"XABA"
@@ -63,6 +69,9 @@ PATCH_REGIONS = (
             CONTROLLER_V1_ASSEMBLY_SHA256: bytes.fromhex(
                 "172a" + "00" * 66
             ),
+            PREVIOUS_FINAL_ASSEMBLY_SHA256: bytes.fromhex(
+                "172a" + "00" * 66
+            ),
         },
     ),
     (
@@ -84,6 +93,10 @@ PATCH_REGIONS = (
                 "031f262e18031f282e1703172e0f03152e0f031f642f0e031f9c31092a1f64"
                 "2b021f9c1001027b3b390004036f425e00062a00000000"
             ),
+            PREVIOUS_FINAL_ASSEMBLY_SHA256: bytes.fromhex(
+                "7e473600042c012a02032894610006281e3000067ba51e00042c0403152e0403"
+                "173306031f645a1001027b3b390004036f425e00062a"
+            ),
         },
     ),
     (
@@ -104,6 +117,10 @@ PATCH_REGIONS = (
                 "02285965000602285b650006282803000a2c0b027282030070285a6500060228"
                 "6d3000062a00000000000000000000000000"
             ),
+            PREVIOUS_FINAL_ASSEMBLY_SHA256: bytes.fromhex(
+                "02285965000602285b650006282803000a2c0b027282030070285a6500060228"
+                "6d3000062a00000000000000000000000000"
+            ),
         },
     ),
     (
@@ -113,6 +130,7 @@ PATCH_REGIONS = (
             ORIGINAL_ASSEMBLY_SHA256: bytes.fromhex("9f694d00"),
             LEGACY_PATCHED_ASSEMBLY_SHA256: bytes.fromhex("9f694d00"),
             CONTROLLER_V1_ASSEMBLY_SHA256: bytes.fromhex("a1694d00"),
+            PREVIOUS_FINAL_ASSEMBLY_SHA256: bytes.fromhex("9f694d00"),
         },
     ),
     (
@@ -122,6 +140,7 @@ PATCH_REGIONS = (
             ORIGINAL_ASSEMBLY_SHA256: bytes.fromhex("61ae4a00"),
             LEGACY_PATCHED_ASSEMBLY_SHA256: bytes.fromhex("61ae4a00"),
             CONTROLLER_V1_ASSEMBLY_SHA256: bytes.fromhex("61ae4a00"),
+            PREVIOUS_FINAL_ASSEMBLY_SHA256: bytes.fromhex("a4d78d00"),
         },
     ),
     (
@@ -131,6 +150,7 @@ PATCH_REGIONS = (
             ORIGINAL_ASSEMBLY_SHA256: bytes.fromhex("3dc24a00"),
             LEGACY_PATCHED_ASSEMBLY_SHA256: bytes.fromhex("3dc24a00"),
             CONTROLLER_V1_ASSEMBLY_SHA256: bytes.fromhex("3dc24a00"),
+            PREVIOUS_FINAL_ASSEMBLY_SHA256: bytes.fromhex("61ae4a00"),
         },
     ),
     (
@@ -143,6 +163,30 @@ PATCH_REGIONS = (
             ORIGINAL_ASSEMBLY_SHA256: bytes(46),
             LEGACY_PATCHED_ASSEMBLY_SHA256: bytes(46),
             CONTROLLER_V1_ASSEMBLY_SHA256: bytes(46),
+            PREVIOUS_FINAL_ASSEMBLY_SHA256: bytes.fromhex(
+                "b6027535070002252c0b03172e1003182e14262b0126020328946100062a1f64"
+                "6fa36300062a1f9c6fa36300062a"
+            ),
+        },
+    ),
+    (
+        0x301ABF,
+        bytes.fromhex("220000403f7dc41e0004"),
+        {
+            ORIGINAL_ASSEMBLY_SHA256: bytes.fromhex("220000803f7dc41e0004"),
+            LEGACY_PATCHED_ASSEMBLY_SHA256: bytes.fromhex("220000803f7dc41e0004"),
+            CONTROLLER_V1_ASSEMBLY_SHA256: bytes.fromhex("220000803f7dc41e0004"),
+            PREVIOUS_FINAL_ASSEMBLY_SHA256: bytes.fromhex("220000803f7dc41e0004"),
+        },
+    ),
+    (
+        0x3021D5,
+        bytes.fromhex("220000403f7dc31e0004"),
+        {
+            ORIGINAL_ASSEMBLY_SHA256: bytes.fromhex("220000803f7dc31e0004"),
+            LEGACY_PATCHED_ASSEMBLY_SHA256: bytes.fromhex("220000803f7dc31e0004"),
+            CONTROLLER_V1_ASSEMBLY_SHA256: bytes.fromhex("220000803f7dc31e0004"),
+            PREVIOUS_FINAL_ASSEMBLY_SHA256: bytes.fromhex("220000803f7dc31e0004"),
         },
     ),
 )
@@ -172,6 +216,15 @@ def contained(root, path):
 class Lz4(object):
     def __init__(self):
         candidates = []
+        bundled = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "liblz4.so.1"
+        )
+        if regular_file(bundled):
+            with open(bundled, "rb") as stream:
+                bundled_hash = sha256_bytes(stream.read())
+            if bundled_hash != BUNDLED_LZ4_SHA256:
+                fail("bundled liblz4 SHA-256 mismatch: " + bundled_hash)
+            candidates.append(bundled)
         discovered = ctypes.util.find_library("lz4")
         if discovered:
             candidates.append(discovered)
@@ -250,7 +303,7 @@ def rva_to_file_offset(image, rva):
     fail("PE RVA is outside every section")
 
 
-def strip_debug_directory(image):
+def strip_debug_directory(image, source_hash):
     known_data_offset = 0x8DB9A4
     known_data_size = 0x8B
     pe = struct.unpack_from("<I", image, 0x3C)[0]
@@ -260,9 +313,16 @@ def strip_debug_directory(image):
     directory = directories + 6 * 8
     debug_rva, debug_size = struct.unpack_from("<II", image, directory)
     if not debug_rva:
-        if image[known_data_offset : known_data_offset + known_data_size] != bytes(
-            known_data_size
-        ):
+        expected = bytes(known_data_size)
+        if source_hash == PREVIOUS_FINAL_ASSEMBLY_SHA256:
+            controller_code = bytes.fromhex(
+                "b6027535070002252c0b03172e1003182e14262b0126020328946100062a1f64"
+                "6fa36300062a1f9c6fa36300062a"
+            )
+            expected = controller_code + bytes(
+                known_data_size - len(controller_code)
+            )
+        if image[known_data_offset : known_data_offset + known_data_size] != expected:
             fail("stripped CodeView code cave is not clean")
         return
     if debug_size < 28:
@@ -297,11 +357,12 @@ def patch_assembly(assembly):
         ORIGINAL_ASSEMBLY_SHA256,
         LEGACY_PATCHED_ASSEMBLY_SHA256,
         CONTROLLER_V1_ASSEMBLY_SHA256,
+        PREVIOUS_FINAL_ASSEMBLY_SHA256,
     ):
         fail("unsupported StardewValley.dll SHA-256 " + source_hash)
 
     output = bytearray(assembly)
-    strip_debug_directory(output)
+    strip_debug_directory(output, source_hash)
     for offset, replacement, expected_by_hash in PATCH_REGIONS:
         expected = expected_by_hash[source_hash]
         if output[offset : offset + len(expected)] != expected:
@@ -344,6 +405,7 @@ def prepare_store(store_bytes):
         ORIGINAL_ASSEMBLY_SHA256,
         LEGACY_PATCHED_ASSEMBLY_SHA256,
         CONTROLLER_V1_ASSEMBLY_SHA256,
+        PREVIOUS_FINAL_ASSEMBLY_SHA256,
         FINAL_ASSEMBLY_SHA256,
     }
     match = None

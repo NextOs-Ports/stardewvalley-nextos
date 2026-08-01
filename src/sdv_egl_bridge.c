@@ -763,9 +763,12 @@ static void sdv_prepare_present(void)
     if (scissor) enable(0x0c11u);
 }
 
-/* Crosshair pequeno e independente do cursor/foco do Stardew. glClear com
- * scissor evita shader/VBO extra e, importante no Mali antigo, restaura todo
- * estado GL tocado antes de devolver o backbuffer ao SDL. */
+/* Seta de mouse em pixel-art, independente do cursor/foco do Stardew. A ponta
+ * superior esquerda continua sendo o hotspot exato enviado no toque de R3.
+ * glClear com scissor evita shader/VBO/texture extra e, importante no Mali
+ * antigo, restaura todo estado GL tocado antes de devolver o backbuffer ao
+ * SDL. O desenho usa poucos retangulos sobrepostos: contorno preto, miolo
+ * dourado quente e um pequeno brilho ciano no hotspot. */
 static void sdv_draw_right_cursor(void)
 {
     typedef void (*GetIntegervFn)(unsigned int, int *);
@@ -851,11 +854,28 @@ static void sdv_draw_right_cursor(void)
             clear(0x00004000u /* GL_COLOR_BUFFER_BIT */);                     \
         }                                                                    \
     } while (0)
-    SDV_CURSOR_RECT(x - 13, y - 2, 27, 5, 0.0f, 0.0f, 0.0f);
-    SDV_CURSOR_RECT(x - 2, y - 13, 5, 27, 0.0f, 0.0f, 0.0f);
-    SDV_CURSOR_RECT(x - 11, y, 23, 1, 1.0f, 1.0f, 1.0f);
-    SDV_CURSOR_RECT(x, y - 11, 1, 23, 1.0f, 1.0f, 1.0f);
-    SDV_CURSOR_RECT(x - 1, y - 1, 3, 3, 0.2f, 0.9f, 1.0f);
+    /* Silhueta escalonada: uma seta classica apontando para (x,y). */
+    SDV_CURSOR_RECT(x - 1, y - 1,  4, 4, 0.0f, 0.0f, 0.0f);
+    SDV_CURSOR_RECT(x - 1, y + 2,  7, 4, 0.0f, 0.0f, 0.0f);
+    SDV_CURSOR_RECT(x - 1, y + 5, 10, 4, 0.0f, 0.0f, 0.0f);
+    SDV_CURSOR_RECT(x - 1, y + 8, 13, 4, 0.0f, 0.0f, 0.0f);
+    SDV_CURSOR_RECT(x - 1, y + 11, 16, 4, 0.0f, 0.0f, 0.0f);
+    SDV_CURSOR_RECT(x - 1, y + 14, 19, 5, 0.0f, 0.0f, 0.0f);
+    SDV_CURSOR_RECT(x + 5, y + 16,  6, 8, 0.0f, 0.0f, 0.0f);
+    SDV_CURSOR_RECT(x + 8, y + 20,  6, 8, 0.0f, 0.0f, 0.0f);
+    SDV_CURSOR_RECT(x + 11, y + 24, 6, 7, 0.0f, 0.0f, 0.0f);
+
+    /* Preenchimento Stardew: creme/dourado, sempre legivel em mapa e menu. */
+    SDV_CURSOR_RECT(x + 1, y + 2,  2, 2, 1.0f, 0.86f, 0.32f);
+    SDV_CURSOR_RECT(x + 1, y + 4,  4, 3, 1.0f, 0.86f, 0.32f);
+    SDV_CURSOR_RECT(x + 1, y + 7,  7, 3, 1.0f, 0.86f, 0.32f);
+    SDV_CURSOR_RECT(x + 1, y + 10, 10, 3, 1.0f, 0.86f, 0.32f);
+    SDV_CURSOR_RECT(x + 1, y + 13, 13, 3, 1.0f, 0.86f, 0.32f);
+    SDV_CURSOR_RECT(x + 1, y + 16, 15, 2, 1.0f, 0.86f, 0.32f);
+    SDV_CURSOR_RECT(x + 7, y + 18,  3, 5, 1.0f, 0.86f, 0.32f);
+    SDV_CURSOR_RECT(x + 10, y + 22, 3, 5, 1.0f, 0.86f, 0.32f);
+    SDV_CURSOR_RECT(x + 13, y + 26, 2, 3, 1.0f, 0.86f, 0.32f);
+    SDV_CURSOR_RECT(x, y, 2, 2, 0.2f, 0.9f, 1.0f);
 #undef SDV_CURSOR_RECT
 
     clear_color(old_clear[0], old_clear[1], old_clear[2], old_clear[3]);

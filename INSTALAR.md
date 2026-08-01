@@ -1,4 +1,4 @@
-# Stardew Valley v1.1.0 — instalação multi-device
+# Stardew Valley v1.1.1 — instalação multi-device
 
 So-loader próprio que roda o **Stardew Valley de Android** (Mono/.NET 8 AOT + MonoGame)
 direto no Linux do handheld, sem Android e sem container.
@@ -31,6 +31,7 @@ teto auditado: 2.30).
     stardewvalley / stardewvalley.multi      <- loaders deste zip
     nxextract.py / nxextract-ui              <- preparação visual e transacional
     extractor.json                           <- receita exata do Stardew 1.6.15.3
+    tools/liblz4.so.1                         <- LZ4 AArch64 incluído (GLIBC 2.17)
     alsoft.conf                              <- negociação OpenAL
     gamedata/
         <seu pacote Android>                  <- VOCÊ põe aqui, e só
@@ -50,8 +51,10 @@ instalação terminar com sucesso.
 
 O extrator confere versão, ABI, árvore, tamanhos e fingerprint antes do commit. Um
 marcador verificado evita reextrações; instalações antigas do v1.0 são migradas e
-adotadas sem mexer nos saves. Se os dados existentes estiverem inválidos, basta manter
-uma origem 1.6.15.3 suportada em `gamedata/` para o reparo transacional.
+adotadas sem mexer nos saves. A v1.1.1 também retoma stages da v1.1.0 que pararam em 65%
+no ROCKNIX por falta de `liblz4.so`; não é necessário extrair os 394 MB novamente. Se
+os dados existentes estiverem inválidos, basta manter uma origem 1.6.15.3 suportada em
+`gamedata/` para o reparo transacional.
 
 O launcher acha o `<roms>` sozinho (`$directory` do PortMaster, `/roms`, `/storage/roms`, ou
 o diretório do próprio script). O binário confirma pela própria localização
@@ -77,6 +80,9 @@ o que negociar; achado o acerto, ele vira automático no binário.
 | `SDV_RIGHT_CURSOR=0` | desliga o cursor independente do analógico direito |
 | `SDV_INPUT_TRACE=1` | diagnóstico detalhado de input; não usar no dia a dia |
 
+Fazendas novas usam zoom inicial 0,75; saves existentes preservam sua preferência
+serializada. O analógico direito mostra uma seta pixel-art cuja ponta é o hotspot de R3.
+
 O log de cada sessão fica em `sdvnextos/debug.log` (a anterior em `debug.prev.log`). A
 primeira coisa a ler é a linha `[sdv-egl] ready ... GL='...'`: ela diz com qual GPU e qual
 contexto você está falando.
@@ -99,7 +105,7 @@ Sair do jogo: **SELECT + START**.
 ## Compilar
 
 ```bash
-./build.sh                         # NextOS atual -> stardewvalley
+bash ./build.sh                    # NextOS atual -> stardewvalley
 
 SR=<sysroot NextOS aarch64 atual>
 docker run --rm -v "$PWD":/repo -v "$SR":/nxsr:ro \
