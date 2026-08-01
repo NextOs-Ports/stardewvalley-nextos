@@ -1,4 +1,4 @@
-# Stardew Valley — native AArch64 port (Mono/.NET Android on plain Linux)
+# Stardew Valley — native AArch64 multi-device port
 
 **Language / Idioma:** [English](#english) · [Português](#português)
 
@@ -16,11 +16,32 @@ You supply your own legal copy.
 Grab **`Stardew.Valley.NextOS.zip`** from the
 [latest release](https://github.com/NextOs-Ports/stardewvalley-nextos/releases/latest)
 and extract it into your device's ROM root (`/roms` on ArkOS/ROCKNIX/muOS/Knulli/batocera,
-`/storage/roms` on EmuELEC/NextOS). Drop your own arm64-v8a APK inside
-`ports/sdvnextos/` and launch it from the Ports menu — the first run extracts the data
-by itself (~420 MB, a few minutes) and deletes the APK to free the card.
+`/storage/roms` on EmuELEC/NextOS). Put your own arm64-v8a Android package in
+`ports/sdvnextos/gamedata/` and launch it from the Ports menu. **NXExtract 1.1.2**
+validates and prepares the data transactionally on the first run (~420 MB, a few
+minutes). APK, APKM, APKS, XAPK and bundle ZIP inputs are accepted.
 
 **Exit the game: SELECT + START.**
+
+## v1.1.0 — controller and universal-device release
+
+- Character fields now always open the game's internal keyboard. Clicking a fresh
+  field clears only its red placeholder; a real name is never erased.
+- The final Options tab scrolls natively with D-pad navigation, all the way
+  through Snow Transparency, toolbar settings and Screenshot. The right-stick cursor
+  remains available everywhere.
+- NXExtract installs, validates, updates and adopts existing 1.6.15.3 data safely. It
+  also migrates the earlier public assembly-store patch without touching saves.
+- Video and audio now prefer each firmware's own SDL/EGL/GLES/OpenAL stack and negotiate
+  resolution, graphics context and sound backend instead of forcing one device profile.
+- Two audited loaders are included: the current NextOS sysroot build (glibc 2.43) and an
+  external-CFW compatibility build (current artifact max GLIBC 2.17).
+
+**Em português:** esta release corrige o teclado dos três campos de personagem (a dica
+vermelha some ao clicar, sem apagar nomes reais), adiciona rolagem nativa por controle na
+última aba das Opções, integra o NXExtract 1.1.2 com migração segura do v1.0 e negocia
+vídeo/áudio com as bibliotecas de cada firmware. Tudo foi retestado em gameplay real no
+ArkOS, incluindo áudio, save preservado e retorno ao jogo depois do fim das Opções.
 
 ## Screenshots
 
@@ -30,11 +51,12 @@ Real framebuffer captures off real hardware — no upscaling, no mock-ups:
 |---|---|
 | ![Title screen at night, Mali-450](docs/screenshots/01-title-mali450-night.png) | ![Title screen by day, Mali-450](docs/screenshots/02-title-mali450-day.png) |
 | ![Title screen on the R36S](docs/screenshots/03-title-r36s.png) | ![Farm gameplay on the R36S](docs/screenshots/04-gameplay-r36s.png) |
+| ![Controller keyboard on the R36S](docs/screenshots/05-controller-keyboard-r36s.png) | ![Native Options scrolling on the R36S](docs/screenshots/06-options-native-scroll-r36s.png) |
 
 Top row: NextOS Elite handheld (Amlogic, **Mali-450**, GLES2 only, ~1 GB RAM) at
 1280×720 — the animated day/night sky of the title screen, in the game's own
-Portuguese localisation. Bottom row: **R36S / ArkOS** (RK3326, Mali-G31, KMSDRM) at
-640×480, title and farm gameplay.
+Portuguese localisation. Remaining rows: **R36S / ArkOS** (RK3326, Mali-G31, KMSDRM)
+at 640×480, showing title, farm gameplay and the two controller fixes from v1.1.0.
 
 ---
 
@@ -53,13 +75,15 @@ Questions, bug reports, help getting the port running, and news about the next o
 | Device | Video | State |
 |---|---|---|
 | Mali-450 / Amlogic-old (EmuELEC, fbdev) | ES2 on fbdev, 1280×720 | playable, real save — the bench this port was born on |
-| R36S / ArkOS (RK3326, Mali-G31) | ES2 over an ES3 context, KMSDRM, 640×480 | playable, real save, validated |
+| R36S / ArkOS (RK3326, Mali-G31) | ES2 over an ES3 context, KMSDRM, 640×480 | playable, real save, controller/audio/video validated on 2026-08-01 |
 | Other AArch64 (Mesa/Panfrost, wayland, muOS…) | negotiated at runtime | should come up; no device here to confirm |
 
-Character creation, the game's own in-game keyboard, first save written and validated
-(a real 3 MB `SaveGameInfo` pair), gameplay, audio, VSync, and healthy memory
-(~250–333 MB RSS, no relevant swap). The shipped `stardewvalley.multi` binary is built
-in `debian:buster` (max GLIBC 2.17), so it runs on old and current CFW alike.
+Character creation, the game's own controller keyboard, native Options scrolling, real
+saves, gameplay, OpenAL audio and VSync were exercised on hardware. A complete ArkOS
+session covered first-run setup, title menus, a loaded farm, the full Options list and
+return to gameplay without changing the existing saves. The shipped
+`stardewvalley.multi` is built in Debian Buster (current artifact max GLIBC 2.17), so it
+covers old and current external CFWs; NextOS uses its own current-sysroot loader.
 
 > The famous "fundamental allocator wall" (Mono asserting `lock-free-alloc.c:608`)
 > turned out **not** to be a wall at all: Bionic and glibc number their `sysconf`
@@ -105,6 +129,8 @@ runtime.
 | `SetRenderTarget` silently ignored (no FBOs) | fake `Looper.myLooper()` made `SyncContext.Send` run on the background task | promote the worker to foreground in `myLooper` — UI-thread semantics restored |
 | Mali corrupted after ~1500 frames | temporary GL trace wrappers | production dispatch returns the context entrypoints directly (14k+ frames stable) |
 | no keyboard on `TextBox` fields | `ShowAndroidKeyboard` expects the Android IME | patched to open the game's own `TextEntryMenu` |
+| red placeholder corrupts a new name | Android normally replaces the hint, but the Linux path treated it as real text | clear only when `Text == TitleText`, then preserve all user-entered text |
+| final Options tab only scrolls with a cursor | Android gamepad buttons reached the page but had no native scroll action | route D-pad Up/Down to the page's own bounded scroll method; retain the original behavior for every other menu/button |
 | save stuck / simulated "disk full" | offline network barrier + `Java.IO.File.get_UsableSpace` returning 0 | confirm the barrier, return the real `statvfs` |
 | flicker/tearing | swap interval set before the context existed | `SDL_GL_SetSwapInterval(1)` once the context is current |
 | game closed at "Saving…" on other devices | `getFilesDir` hardcoded to one device path | everything derives from `/proc/self/exe` (`$HOME` is no anchor — Mono rewrites it in `Runtime_init`) |
@@ -113,6 +139,8 @@ runtime.
 ### Controls
 
 - Movement/menus: D-pad and left stick through the native Android/MonoGame path.
+- In long menus such as the final Options tab, D-pad navigation scrolls the
+  page natively and respects its top and bottom limits.
 - A/B/X/Y, L1/R1/L2/R2, Start and Select follow the SDL GameController mapping.
 - **Right stick**: independent native crosshair cursor (radial deadzone + acceleration,
   auto-hides after 2 s). Does not steal the game's native focus.
@@ -130,14 +158,17 @@ You must own the game and supply the legit APK:
 |---|---|---|
 | `com.chucklefish.stardewvalley` | **1.6.15.3** | arm64-v8a (32-bit will not do) |
 
-Put the `.apk` inside the port folder and launch: `tools/stardew_extract.sh` validates
-that it is the right APK *before* spending minutes unpacking, then extracts
-`lib/arm64-v8a/*` → `libs/` and `assets/Content/` → `assets/Content/`. It only needs
-`unzip`, present on every CFW. `SDV_KEEP_APK=1` keeps the APK afterwards.
+Put the package inside `ports/sdvnextos/gamedata/` and launch. NXExtract 1.1.2 accepts
+APK, APKM, APKS, XAPK and bundle ZIP files, resolves the arm64 split when necessary,
+validates the exact package payload and then commits `libs/` and `assets/` as one
+recoverable transaction. On later launches its marker and checkpoints provide a fast
+path; you may remove the source package after setup succeeds.
 
 The assembly store `libassemblies.arm64-v8a.blob.so` receives small local patches
-(in-game keyboard, offline save barrier, real `statvfs` disk space) — that tooling lives
-in `tools/` and runs on *your* copy. Game data is ignored by Git.
+(controller keyboard, placeholder handling, native Options scrolling and the offline
+save barrier) — `tools/prepare_stardew_data.py` applies and verifies them on *your* copy.
+Existing v1.0 data is migrated in place before NXExtract adopts it. Assets and saves are
+never part of Git or the public ZIP.
 
 ### Troubleshooting
 
@@ -155,6 +186,11 @@ already refuses that context, but the log confirms it.
 (`pipewire`, `pulse`, `alsa`). Force one with `AUDIO_DRIVER=alsa` or `AUDIO_DRIVER=pulse`.
 **Camera too close/far** → `SDV_TILES_X=15` controls the framing (screen width in tiles).
 
+For a one-shot developer capture of the actual GPU backbuffer, create
+`/dev/shm/sdv-shot` while the game is running. Within a few presents the port writes
+`/dev/shm/sdv-shot.ppm` and consumes the trigger. This works even when `/dev/fb0` is not
+the active KMS scanout.
+
 All knobs are environment variables, off by default; the full list is in
 [`INSTALAR.md`](INSTALAR.md) (Portuguese).
 
@@ -163,24 +199,34 @@ All knobs are environment variables, off by default; the full list is in
 - `src/` — the ELF loader, Bionic→glibc shims, fake JNI/JavaVM, EGL/GLES bridge, fake
   asset manager and input.
 - `arkos/` — the launcher (PortMaster layout, works on EmuELEC too) and `alsoft.conf`.
-- `package/` — the release ZIP builder, which refuses to package a single byte of game
-  data.
-- `tools/` — the on-device APK extractor and the assembly-store patchers.
+- `nxextract.py`, `nxextract-ui`, `extractor.json` and `run-extractor.sh` — NXExtract
+  1.1.2 plus this game's exact transactional recipe.
+- `package/` — the deterministic release ZIP builder, allowlist and public-data audit.
+- `tools/prepare_stardew_data.py` — portable Python 3.7+ assembly-store migration used
+  on the device; `tools/PatchStardewOsk.cs` is its Cecil-based developer counterpart.
+- `.build-provenance/` and `tools/build_provenance.py` — reproducible source/toolchain
+  records checked before packaging.
 - `HANDOFF.md` — the full engineering log of the Mono/Xamarin bootstrap and every wall
   (required reading before touching the port).
-- `stardewvalley.multi` / `stardewvalley` — prebuilt loaders (buster/GLIBC 2.17 and the
-  NextOS toolchain build).
+- `stardewvalley` — loader built against the current NextOS sysroot (glibc 2.43).
+- `stardewvalley.multi` — explicit external-CFW loader built in Debian Buster (current
+  artifact max GLIBC 2.17; enforced ceiling GLIBC 2.30).
 
 ### Build
 
 ```bash
-SR=<NextOS aarch64 sysroot>
+./build.sh                         # current NextOS sysroot -> stardewvalley
+
+SR=<current NextOS aarch64 sysroot>
 docker run --rm -v "$PWD":/repo -v "$SR":/nxsr:ro \
-  gtactw-arm64-builder:debian-buster bash /repo/build_buster.sh   # -> stardewvalley.multi
+  gtactw-arm64-builder:debian-buster bash /repo/build_buster.sh
+                                    # external CFW -> stardewvalley.multi
+
+./package/build-package.sh         # audited deterministic BYO-data ZIP
 ```
 
-`build.sh` is the quick build with the NextOS toolchain (faster iteration, but the
-binary only runs on a recent glibc). `package/build-package.sh` assembles the release
+Both build scripts write provenance records. Packaging verifies their source digest,
+compiler/sysroot identity, AArch64 architecture and GLIBC bounds before creating the
 ZIP.
 
 ### Licences
@@ -208,13 +254,15 @@ user, from their own legal copy.
 | Aparelho | Vídeo | Estado |
 |---|---|---|
 | Mali-450 / Amlogic-old (EmuELEC, fbdev) | ES2 em fbdev, 1280×720 | jogável, save real — é a bancada onde o port nasceu |
-| R36S / ArkOS (RK3326, Mali-G31) | ES2 sobre contexto ES3, KMSDRM, 640×480 | jogável, save real, validado |
+| R36S / ArkOS (RK3326, Mali-G31) | ES2 sobre contexto ES3, KMSDRM, 640×480 | jogável, save real, controles/áudio/vídeo validados em 01/08/2026 |
 | Outros AArch64 (Mesa/Panfrost, wayland, muOS…) | negociado em runtime | deve subir; sem device aqui pra confirmar |
 
-Criação de personagem, teclado interno do próprio jogo, primeiro save escrito e
-validado (par de ~3 MB com `SaveGameInfo`), gameplay, áudio, VSync e RAM saudável
-(~250–333 MB de RSS, sem swap relevante). O binário `stardewvalley.multi` é build
-**debian:buster** (GLIBC máx. 2.17), então serve de CFW antigo até os atuais.
+Criação de personagem, teclado do próprio jogo controlado pelo joystick, rolagem nativa
+das Opções, saves reais, gameplay, áudio OpenAL e VSync foram exercitados no aparelho.
+Uma sessão completa no ArkOS passou por preparação inicial, menus, fazenda carregada,
+fim da lista de Opções e volta ao gameplay sem alterar os saves existentes. O
+`stardewvalley.multi` é compilado em Debian Buster (artefato atual: GLIBC máx. 2.17),
+cobrindo CFWs externos antigos e atuais; no NextOS entra o loader do sysroot atual.
 
 > O famoso "muro fundamental do allocator" (Mono abortando em `lock-free-alloc.c:608`)
 > **não era muro nenhum**: Bionic e glibc numeram as constantes de `sysconf` diferente
@@ -259,6 +307,8 @@ de GLES, formato do backbuffer e backend de áudio são todos negociados em runt
 | `SetRenderTarget` ignorado em silêncio (sem FBOs) | `Looper.myLooper()` fake fazia `SyncContext.Send` rodar na task background | promover a worker a foreground no `myLooper` — semântica de UI thread restaurada |
 | Mali corrompia após ~1500 frames | wrappers temporários de trace GL | dispatch de produção devolve os entrypoints do contexto direto (14 mil+ frames estável) |
 | sem teclado nos campos `TextBox` | `ShowAndroidKeyboard` espera o IME do Android | patch abre o `TextEntryMenu` interno do próprio jogo |
+| placeholder vermelho estraga um nome novo | no Android a dica é substituída, mas a rota Linux a tratava como texto real | limpar somente quando `Text == TitleText` e preservar qualquer texto digitado pelo jogador |
+| última aba das Opções só rolava com cursor | botões Android chegavam à página, mas não tinham ação nativa de rolagem | encaminhar D-pad Cima/Baixo ao scroll limitado da própria página e manter a lógica original em todos os outros menus/botões |
 | save preso / "disco cheio" simulado | barreira de rede offline + `Java.IO.File.get_UsableSpace` devolvendo 0 | confirmar a barreira e devolver o `statvfs` real |
 | flicker/tearing | swap interval setado antes do contexto existir | `SDL_GL_SetSwapInterval(1)` com o contexto atual |
 | jogo fechava no "Salvando…" em outro aparelho | `getFilesDir` cravado no caminho de um device | tudo passa a sair de `/proc/self/exe` (`$HOME` não serve de âncora — o Mono o reescreve no `Runtime_init`) |
@@ -267,6 +317,8 @@ de GLES, formato do backbuffer e backend de áudio são todos negociados em runt
 ### Controles
 
 - Movimento/menus: D-pad e analógico esquerdo pelo caminho nativo Android/MonoGame.
+- Em menus longos, como a última aba das Opções, o D-pad rola a página
+  nativamente e respeitam os limites superior e inferior.
 - A/B/X/Y, L1/R1/L2/R2, Start e Select seguem o mapeamento SDL GameController.
 - **Analógico direito**: cursor crosshair nativo independente (deadzone radial +
   aceleração, some sozinho após 2 s). Não rouba o foco nativo do jogo.
@@ -284,15 +336,17 @@ ConcernedApe. Você precisa ter o jogo e fornecer o APK legítimo:
 |---|---|---|
 | `com.chucklefish.stardewvalley` | **1.6.15.3** | arm64-v8a (a de 32 bits não serve) |
 
-Ponha o `.apk` dentro da pasta do port e abra: o `tools/stardew_extract.sh` confere que é
-o APK certo *antes* de gastar minutos descompactando, e então extrai `lib/arm64-v8a/*` →
-`libs/` e `assets/Content/` → `assets/Content/`. Depende só de `unzip`, presente em todo
-CFW. `SDV_KEEP_APK=1` mantém o APK no fim.
+Ponha o pacote em `ports/sdvnextos/gamedata/` e abra. O NXExtract 1.1.2 aceita APK,
+APKM, APKS, XAPK e ZIP de bundle, resolve o split arm64 quando necessário, valida o
+conteúdo exato do pacote e só então confirma `libs/` e `assets/` numa transação
+recuperável. Nas próximas aberturas, marcador e checkpoints dão o caminho rápido; depois
+de uma instalação bem-sucedida, você pode remover o pacote de origem.
 
 O assembly store `libassemblies.arm64-v8a.blob.so` recebe pequenos patches locais
-(teclado interno, barreira de save offline, espaço em disco real via `statvfs`) — esse
-ferramental fica em `tools/` e roda na *sua* cópia. Os dados do jogo continuam ignorados
-pelo Git.
+(teclado no controle, placeholders, rolagem nativa das Opções e barreira de save
+offline) — `tools/prepare_stardew_data.py` aplica e verifica tudo na *sua* cópia. Dados
+do v1.0 são migrados antes de o NXExtract adotá-los. Assets e saves nunca entram no Git
+nem no ZIP público.
 
 ### Se algo não funcionar
 
@@ -311,6 +365,10 @@ o log confirma.
 **Câmera muito perto ou muito longe** → `SDV_TILES_X=15` controla o enquadramento
 (largura da tela em tiles).
 
+Para uma captura técnica única do backbuffer real da GPU, crie `/dev/shm/sdv-shot`
+enquanto o jogo roda. Em poucos presents, o port grava `/dev/shm/sdv-shot.ppm` e consome
+o gatilho. Isso funciona mesmo quando `/dev/fb0` não é o scanout KMS ativo.
+
 Todos os ajustes são variáveis de ambiente, desligadas por padrão; a lista completa está
 em [`INSTALAR.md`](INSTALAR.md).
 
@@ -319,24 +377,34 @@ em [`INSTALAR.md`](INSTALAR.md).
 - `src/` — o loader ELF, os shims Bionic→glibc, a JNI/JavaVM fake, a ponte EGL/GLES, o
   asset manager fake e o input.
 - `arkos/` — o launcher (layout PortMaster, serve no EmuELEC também) e o `alsoft.conf`.
-- `package/` — o montador do ZIP de release, que se recusa a empacotar um byte de dado
-  de jogo.
-- `tools/` — o extrator de APK que roda no aparelho e os patchers do assembly store.
+- `nxextract.py`, `nxextract-ui`, `extractor.json` e `run-extractor.sh` — NXExtract
+  1.1.2 e a receita transacional exata deste jogo.
+- `package/` — montador determinístico do ZIP, allowlist e auditoria de dados públicos.
+- `tools/prepare_stardew_data.py` — migração portátil Python 3.7+ usada no aparelho;
+  `tools/PatchStardewOsk.cs` é a contraparte de desenvolvimento baseada no Cecil.
+- `.build-provenance/` e `tools/build_provenance.py` — registros reproduzíveis de fonte
+  e toolchain conferidos antes do empacotamento.
 - `HANDOFF.md` — o log de engenharia completo do bootstrap Mono/Xamarin e de cada muro
   (leitura obrigatória antes de mexer no port).
-- `stardewvalley.multi` / `stardewvalley` — loaders já compilados (buster/GLIBC 2.17 e o
-  build da toolchain NextOS).
+- `stardewvalley` — loader compilado contra o sysroot atual do NextOS (glibc 2.43).
+- `stardewvalley.multi` — loader explícito para CFWs externos, compilado no Debian
+  Buster (artefato atual GLIBC máx. 2.17; teto obrigatório GLIBC 2.30).
 
 ### Compilar
 
 ```bash
-SR=<sysroot NextOS aarch64>
+./build.sh                         # sysroot NextOS atual -> stardewvalley
+
+SR=<sysroot NextOS aarch64 atual>
 docker run --rm -v "$PWD":/repo -v "$SR":/nxsr:ro \
-  gtactw-arm64-builder:debian-buster bash /repo/build_buster.sh   # -> stardewvalley.multi
+  gtactw-arm64-builder:debian-buster bash /repo/build_buster.sh
+                                    # CFW externo -> stardewvalley.multi
+
+./package/build-package.sh         # ZIP BYO-data determinístico e auditado
 ```
 
-`build.sh` é o build rápido com a toolchain do NextOS (itera mais rápido, mas o binário
-só serve em glibc nova). O `package/build-package.sh` monta o ZIP da release.
+Os dois builds gravam a procedência. Antes de criar o ZIP, o empacotador confere digest
+da fonte, compilador/sysroot, arquitetura AArch64 e limites de GLIBC.
 
 ### Licenças
 

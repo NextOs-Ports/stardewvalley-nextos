@@ -865,6 +865,103 @@ static void sdv_draw_right_cursor(void)
     if (!old_scissor) disable(0x0c11u /* GL_SCISSOR_TEST */);
 }
 
+/* Captura de diagnostico sob demanda, feita na propria thread de render.
+ * KMSDRM nao espelha necessariamente o scanout em /dev/fb0, portanto fbgrab
+ * pode devolver uma tela preta mesmo quando o jogo esta desenhando. Criar
+ * /dev/shm/sdv-shot gera um PPM verticalmente corrigido do backbuffer em
+ * /dev/shm/sdv-shot.ppm. Sem o gatilho, o custo se resume a um access() a
+ * cada 15 presents. */
+static void sdv_capture_backbuffer_if_requested(void)
+{
+    typedef void (*GetIntegervFn)(unsigned int, int *);
+    typedef void (*PixelStoreiFn)(unsigned int, int);
+    typedef void (*ReadPixelsFn)(int, int, int, int, unsigned int,
+                                 unsigned int, void *);
+    static GetIntegervFn get_integerv;
+    static PixelStoreiFn pixel_storei;
+    static ReadPixelsFn read_pixels;
+    static int resolved;
+    const char *trigger = "/dev/shm/sdv-shot";
+    const char *temporary = "/dev/shm/sdv-shot.ppm.tmp";
+    const char *output = "/dev/shm/sdv-shot.ppm";
+    int viewport[4] = {0, 0, 0, 0};
+    int framebuffer = -1;
+    int old_pack_alignment = 4;
+    unsigned char *rgba = NULL;
+    unsigned char *rgb_row = NULL;
+    FILE *stream = NULL;
+    int ok = 0;
+
+    if (g_swap_count % 15u != 0 || access(trigger, F_OK) != 0)
+        return;
+    unlink(trigger);
+
+#define SDV_SHOT_GL_RESOLVE(dst, name) do {                                 \
+        void *p_ = g_sdl.gl_get_proc_address(name);                          \
+        memcpy(&(dst), &p_, sizeof(dst));                                    \
+    } while (0)
+    if (!resolved) {
+        resolved = 1;
+        SDV_SHOT_GL_RESOLVE(get_integerv, "glGetIntegerv");
+        SDV_SHOT_GL_RESOLVE(pixel_storei, "glPixelStorei");
+        SDV_SHOT_GL_RESOLVE(read_pixels, "glReadPixels");
+    }
+#undef SDV_SHOT_GL_RESOLVE
+    if (!get_integerv || !pixel_storei || !read_pixels)
+        goto out;
+
+    get_integerv(0x8ca6u /* GL_FRAMEBUFFER_BINDING */, &framebuffer);
+    get_integerv(0x0ba2u /* GL_VIEWPORT */, viewport);
+    if (framebuffer != 0 || viewport[2] <= 0 || viewport[3] <= 0)
+        goto out;
+    if ((size_t)viewport[2] > SIZE_MAX / 4u / (size_t)viewport[3])
+        goto out;
+
+    rgba = malloc((size_t)viewport[2] * (size_t)viewport[3] * 4u);
+    rgb_row = malloc((size_t)viewport[2] * 3u);
+    if (!rgba || !rgb_row)
+        goto out;
+
+    get_integerv(0x0d05u /* GL_PACK_ALIGNMENT */, &old_pack_alignment);
+    pixel_storei(0x0d05u /* GL_PACK_ALIGNMENT */, 1);
+    read_pixels(viewport[0], viewport[1], viewport[2], viewport[3],
+                0x1908u /* GL_RGBA */, 0x1401u /* GL_UNSIGNED_BYTE */, rgba);
+    pixel_storei(0x0d05u /* GL_PACK_ALIGNMENT */, old_pack_alignment);
+
+    stream = fopen(temporary, "wb");
+    if (!stream || fprintf(stream, "P6\n%d %d\n255\n",
+                           viewport[2], viewport[3]) < 0)
+        goto out;
+    for (int y = viewport[3] - 1; y >= 0; --y) {
+        const unsigned char *source =
+            rgba + (size_t)y * (size_t)viewport[2] * 4u;
+        for (int x = 0; x < viewport[2]; ++x) {
+            rgb_row[(size_t)x * 3u + 0u] = source[(size_t)x * 4u + 0u];
+            rgb_row[(size_t)x * 3u + 1u] = source[(size_t)x * 4u + 1u];
+            rgb_row[(size_t)x * 3u + 2u] = source[(size_t)x * 4u + 2u];
+        }
+        if (fwrite(rgb_row, 3u, (size_t)viewport[2], stream) !=
+            (size_t)viewport[2])
+            goto out;
+    }
+    if (fclose(stream) != 0) {
+        stream = NULL;
+        goto out;
+    }
+    stream = NULL;
+    if (rename(temporary, output) != 0)
+        goto out;
+    ok = 1;
+
+out:
+    if (stream) fclose(stream);
+    if (!ok) unlink(temporary);
+    free(rgb_row);
+    free(rgba);
+    fprintf(stderr, "[sdv-egl] screenshot %s: %s\n",
+            ok ? "saved" : "failed", output);
+}
+
 int sdv_egl_swap(void *surface)
 {
     int result = 0;
@@ -873,6 +970,7 @@ int sdv_egl_swap(void *surface)
     if (surface && g_window && g_context && g_sdl.gl_swap_window) {
         sdv_prepare_present();
         sdv_draw_right_cursor();
+        sdv_capture_backbuffer_if_requested();
         g_sdl.gl_swap_window(g_window);
         ++g_swap_count;
         const char *trace = getenv("SDV_GL_TRACE");

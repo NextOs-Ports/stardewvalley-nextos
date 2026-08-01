@@ -1,0 +1,14 @@
+{
+  "binary": "stardewvalley",
+  "binary_bytes": 172128,
+  "binary_sha256": "aad49dd573458c6a23af76cfac4ea7c9989b022decb0935211c6738495bfccfe",
+  "compiler": "aarch64-libreelec-linux-gnu-gcc-16.1.0 (GCC) 16.1.0",
+  "elf_machine": "AArch64",
+  "elf_required_glibc_max": "2.43",
+  "format": 1,
+  "profile": "nextos-current",
+  "source_digest": "c3dc11b46394d92cfeadf2396c5dd3958d9672efb898e56969b274b1bc1b624f",
+  "sysroot_glibc": "2.43",
+  "sysroot_libc_sha256": "7deb1ff6fb1ccdb6bfe23ba1cd5ce0311dc40d7fd0d253e3232d7b6ecaf10df6",
+  "target": "NextOS/NextOS Elite current sysroot"
+}

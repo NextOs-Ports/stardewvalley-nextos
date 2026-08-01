@@ -1,10 +1,10 @@
-# Stardew Valley (NextOS) — como instalar
+# Stardew Valley v1.1.0 (NextOS) — como instalar
 
 Port do **Stardew Valley de Android** rodando direto no Linux do seu portátil, por um
 so-loader próprio: sem Android, sem emulador, sem container.
 
-Este pacote traz **só o programa**. Os dados do jogo saem do **seu APK** — nada de conteúdo
-do jogo é distribuído aqui.
+Este pacote traz **só o programa**. Os dados do jogo saem do **seu pacote Android legal**
+— nada de conteúdo do jogo é distribuído aqui.
 
 ---
 
@@ -29,23 +29,26 @@ roms/ports_scripts/Stardew Valley (NextOS).sh
 > `ports_scripts/`, e o ArkOS/ROCKNIX/PortMaster lê de `ports/`. Deixe as duas — quem não
 > usa uma, ignora.
 
-A pasta `fonte/` é só para quem quiser compilar; **não precisa ir para o aparelho**.
+## 2. Ponha o seu pacote Android
 
-## 2. Ponha o seu APK
-
-Copie o APK do jogo para dentro de `roms/ports/sdvnextos/`:
+Copie o pacote do jogo para dentro de `roms/ports/sdvnextos/gamedata/`:
 
 | pacote | versão | ABI |
 |---|---|---|
 | `com.chucklefish.stardewvalley` | **1.6.15.3** | arm64-v8a |
 
-Precisa ser **arm64-v8a** — a versão de 32 bits não serve.
+Precisa conter **arm64-v8a** — a versão somente 32 bits não serve. O NXExtract 1.1.2
+aceita APK, APKM, APKS, XAPK e ZIP de bundle.
 
 ## 3. Abra pelo menu de Ports
 
-Na primeira vez ele extrai os dados do APK sozinho (~420 MB, alguns minutos, a tela mostra
-o progresso), apaga o APK para liberar o cartão e entra no jogo. Da segunda em diante abre
-direto.
+Na primeira vez, o NXExtract mostra o progresso, valida a origem e prepara os dados numa
+transação segura (~420 MB, alguns minutos). Da segunda em diante, um marcador verificado
+abre o jogo diretamente. Depois da confirmação de sucesso, você pode remover o pacote de
+origem para liberar espaço.
+
+Quem já usava o v1.0 pode instalar por cima: o novo preparador migra o assembly store e
+adota os dados existentes sem apagar ou reescrever os saves.
 
 **Sair do jogo: SELECT + START.**
 
@@ -56,10 +59,15 @@ direto.
 | Aparelho | Estado |
 |---|---|
 | Mali-450 / Amlogic (EmuELEC) | jogável, save real — é a bancada onde o port nasceu |
-| R36S / ArkOS (RK3326, Mali-G31) | jogável, save real, validado |
+| R36S / ArkOS (RK3326, Mali-G31) | jogável; teclado, scroll, áudio, vídeo e save validados em 01/08/2026 |
 | Outros AArch64 (Mesa/Panfrost, wayland, muOS…) | deve funcionar — o port negocia vídeo e áudio sozinho, mas ainda não foi confirmado em campo |
 
-O binário roda de glibc 2.17 pra cima, então serve tanto em CFW antigo quanto atual.
+O launcher escolhe entre dois binários auditados: sysroot atual/glibc 2.43 no NextOS e
+compatibilidade externa com GLIBC máx. 2.17 no artefato desta release.
+
+Nesta versão, clicar em Nome/Fazenda/Coisa Favorita limpa automaticamente apenas o texto
+vermelho de dica e abre o teclado interno. A última aba das Opções também rola inteira
+com o D-pad; o cursor do analógico direito continua disponível.
 
 ---
 

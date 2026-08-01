@@ -14,7 +14,7 @@ void *jni_build_env(void);
 /* Ponteiro da JNIEnv (fake_env). */
 void *jni_env_ptr(void);
 
-/* Log de chamadas JNI (default ON se SDV_JNI_VERBOSE=1 ou unset->on). */
+/* Log de chamadas JNI (default OFF; SDV_JNI_VERBOSE=1 habilita o rastreio). */
 void jni_set_verbose(int on);
 
 /* Define o diretorio de libs do app (nativeLibraryDir). Passado como unico

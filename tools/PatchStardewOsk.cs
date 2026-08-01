@@ -1,33 +1,84 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using Mono.Cecil;
 
 // Apply the small offline/controller fixes required by the NextOS loader
-// without rewriting assembly metadata. Rewriting the DLL would disturb the
-// Xamarin assembly-store/AOT identity, so this changes only existing IL bytes
-// in-place and leaves every RVA/token/MVID untouched.
+// without running a general-purpose assembly writer. Rewriting the DLL would
+// disturb the Xamarin assembly-store/AOT identity, so this changes existing IL
+// bytes in-place. Tokens, table shapes and the MVID remain untouched;
+// The controller wrapper lives in the stripped CodeView record, which is part
+// of the mapped .text section. This gives us a small, identity-preserving IL
+// code cave without adding metadata rows or rewriting the assembly.
 internal static class PatchStardewOsk
 {
-    private static int RvaToFileOffset(byte[] image, int rva)
+    private sealed class PeSection
+    {
+        public int HeaderOffset;
+        public int VirtualSize;
+        public int VirtualAddress;
+        public int RawSize;
+        public int RawOffset;
+    }
+
+    private sealed class CodeCave
+    {
+        public int FileOffset;
+        public int Rva;
+        public int Size;
+    }
+
+    private static int Align4(int value)
+    {
+        return (value + 3) & ~3;
+    }
+
+    private static PeSection[] ReadSections(byte[] image)
     {
         int pe = BitConverter.ToInt32(image, 0x3c);
-        int sections = BitConverter.ToUInt16(image, pe + 6);
+        int sectionCount = BitConverter.ToUInt16(image, pe + 6);
         int optionalSize = BitConverter.ToUInt16(image, pe + 20);
-        int section = pe + 24 + optionalSize;
+        int sectionOffset = pe + 24 + optionalSize;
+        PeSection[] sections = new PeSection[sectionCount];
 
-        for (int i = 0; i < sections; i++, section += 40)
+        for (int i = 0; i < sectionCount; ++i, sectionOffset += 40)
         {
-            int virtualSize = BitConverter.ToInt32(image, section + 8);
-            int virtualAddress = BitConverter.ToInt32(image, section + 12);
-            int rawSize = BitConverter.ToInt32(image, section + 16);
-            int rawOffset = BitConverter.ToInt32(image, section + 20);
-            int span = Math.Max(virtualSize, rawSize);
-            if (rva >= virtualAddress && rva < virtualAddress + span)
-                return rawOffset + (rva - virtualAddress);
+            sections[i] = new PeSection {
+                HeaderOffset = sectionOffset,
+                VirtualSize = BitConverter.ToInt32(image, sectionOffset + 8),
+                VirtualAddress = BitConverter.ToInt32(image, sectionOffset + 12),
+                RawSize = BitConverter.ToInt32(image, sectionOffset + 16),
+                RawOffset = BitConverter.ToInt32(image, sectionOffset + 20)
+            };
+        }
+        return sections;
+    }
+
+    private static int RvaToFileOffset(byte[] image, int rva)
+    {
+        foreach (PeSection section in ReadSections(image))
+        {
+            int span = Math.Max(section.VirtualSize, section.RawSize);
+            if (rva >= section.VirtualAddress &&
+                rva < section.VirtualAddress + span)
+                return section.RawOffset + (rva - section.VirtualAddress);
         }
 
         throw new InvalidOperationException("method RVA is outside PE sections");
+    }
+
+    private static int FileOffsetToRva(byte[] image, int fileOffset)
+    {
+        foreach (PeSection section in ReadSections(image))
+        {
+            if (fileOffset >= section.RawOffset &&
+                fileOffset < section.RawOffset + section.RawSize)
+                return section.VirtualAddress + (fileOffset - section.RawOffset);
+        }
+
+        throw new InvalidOperationException("file offset is outside PE sections");
     }
 
     private static int MethodCodeOffset(byte[] image, int methodOffset, out int codeSize)
@@ -71,6 +122,275 @@ internal static class PatchStardewOsk
         image[codeOffset + 1] = 0x2a; // ret
     }
 
+    private static int ReadIndex(byte[] image, ref int offset, int size)
+    {
+        int value;
+        if (size == 2)
+            value = BitConverter.ToUInt16(image, offset);
+        else if (size == 4)
+            value = BitConverter.ToInt32(image, offset);
+        else
+            throw new InvalidOperationException("unsupported metadata index size");
+        offset += size;
+        return value;
+    }
+
+    private static int TableIndexSize(uint[] rowCounts, int table)
+    {
+        return rowCounts[table] < 65536 ? 2 : 4;
+    }
+
+    private static int CodedIndexSize(uint[] rowCounts, int tagBits,
+                                      params int[] tables)
+    {
+        uint largest = 0;
+        foreach (int table in tables)
+            largest = Math.Max(largest, rowCounts[table]);
+        return largest < (1u << (16 - tagBits)) ? 2 : 4;
+    }
+
+    private static int GetMethodDefRowOffset(byte[] image,
+                                              MethodDefinition method)
+    {
+        int pe = BitConverter.ToInt32(image, 0x3c);
+        int optional = pe + 24;
+        int magic = BitConverter.ToUInt16(image, optional);
+        int directories = optional + (magic == 0x20b ? 112 : 96);
+        int cliRva = BitConverter.ToInt32(image, directories + 14 * 8);
+        int cli = RvaToFileOffset(image, cliRva);
+        int metadataRva = BitConverter.ToInt32(image, cli + 8);
+        int metadata = RvaToFileOffset(image, metadataRva);
+        if (Encoding.ASCII.GetString(image, metadata, 4) != "BSJB")
+            throw new InvalidOperationException("invalid CLI metadata root");
+
+        int versionLength = BitConverter.ToInt32(image, metadata + 12);
+        int stream = Align4(metadata + 16 + versionLength);
+        int streamCount = BitConverter.ToUInt16(image, stream + 2);
+        stream += 4;
+        int tables = -1;
+        for (int i = 0; i < streamCount; ++i)
+        {
+            int relative = BitConverter.ToInt32(image, stream);
+            int name = stream + 8;
+            int end = name;
+            while (image[end] != 0) ++end;
+            string streamName = Encoding.ASCII.GetString(image, name, end - name);
+            if (streamName == "#~" || streamName == "#-")
+                tables = metadata + relative;
+            stream = Align4(end + 1);
+        }
+        if (tables < 0)
+            throw new InvalidOperationException("CLI metadata tables not found");
+
+        byte heapSizes = image[tables + 6];
+        ulong valid = BitConverter.ToUInt64(image, tables + 8);
+        uint[] rows = new uint[64];
+        int cursor = tables + 24;
+        for (int table = 0; table < 64; ++table)
+            if ((valid & (1UL << table)) != 0)
+            {
+                rows[table] = BitConverter.ToUInt32(image, cursor);
+                cursor += 4;
+            }
+
+        int strings = (heapSizes & 0x01) != 0 ? 4 : 2;
+        int guids = (heapSizes & 0x02) != 0 ? 4 : 2;
+        int blobs = (heapSizes & 0x04) != 0 ? 4 : 2;
+        int resolutionScope = CodedIndexSize(rows, 2, 0, 26, 35, 1);
+        int typeDefOrRef = CodedIndexSize(rows, 2, 2, 1, 27);
+
+        int[] sizes = new int[7];
+        sizes[0] = 2 + strings + guids * 3;
+        sizes[1] = resolutionScope + strings * 2;
+        sizes[2] = 4 + strings * 2 + typeDefOrRef +
+                   TableIndexSize(rows, 4) + TableIndexSize(rows, 6);
+        sizes[3] = TableIndexSize(rows, 4);
+        sizes[4] = 2 + strings + blobs;
+        sizes[5] = TableIndexSize(rows, 6);
+        sizes[6] = 4 + 2 + 2 + strings + blobs + TableIndexSize(rows, 8);
+
+        for (int table = 0; table < 6; ++table)
+            cursor += checked((int)rows[table] * sizes[table]);
+        int rid = checked((int)method.MetadataToken.RID);
+        if (rid <= 0 || (uint)rid > rows[6])
+            throw new InvalidOperationException("invalid MethodDef row id");
+        return cursor + (rid - 1) * sizes[6];
+    }
+
+    private static CodeCave StripDebugDirectoryAndGetCodeCave(byte[] image,
+                                                               int requiredSize)
+    {
+        const int knownDataOffset = 0x8db9a4;
+        const int knownDataRva = 0x8dd7a4;
+        const int knownDataSize = 0x8b;
+        int pe = BitConverter.ToInt32(image, 0x3c);
+        int optional = pe + 24;
+        int magic = BitConverter.ToUInt16(image, optional);
+        int directories = optional + (magic == 0x20b ? 112 : 96);
+        int debugRva = BitConverter.ToInt32(image, directories + 6 * 8);
+        int debugSize = BitConverter.ToInt32(image, directories + 6 * 8 + 4);
+        CodeCave cave = null;
+
+        if (debugRva != 0 && debugSize >= 28)
+        {
+            int debug = RvaToFileOffset(image, debugRva);
+            for (int entry = debug;
+                 entry + 28 <= debug + debugSize; entry += 28)
+            {
+                int type = BitConverter.ToInt32(image, entry + 12);
+                int size = BitConverter.ToInt32(image, entry + 16);
+                int dataRva = BitConverter.ToInt32(image, entry + 20);
+                int data = BitConverter.ToInt32(image, entry + 24);
+                if (type != 2 || size < requiredSize || data < 0 ||
+                    data + size > image.Length)
+                    continue;
+                if (Encoding.ASCII.GetString(image, data, 4) != "RSDS")
+                    continue;
+                if (dataRva == 0)
+                    dataRva = FileOffsetToRva(image, data);
+                if (RvaToFileOffset(image, dataRva) != data)
+                    throw new InvalidOperationException(
+                        "CodeView RVA/file offset mismatch");
+                cave = new CodeCave {
+                    FileOffset = data,
+                    Rva = dataRva,
+                    Size = size
+                };
+                Array.Clear(image, data, size);
+                break;
+            }
+            if (cave == null)
+                throw new InvalidOperationException(
+                    "suitable CodeView code cave was not found");
+            Array.Clear(image, debug, debugSize);
+            Array.Clear(image, directories + 6 * 8, 8);
+        }
+        else
+        {
+            // A previously prepared 1.6.15.3 assembly has the same exact
+            // CodeView bytes already stripped. Accept that state only at the
+            // content-addressed, section-validated location.
+            if (knownDataOffset + knownDataSize > image.Length ||
+                FileOffsetToRva(image, knownDataOffset) != knownDataRva ||
+                image.Skip(knownDataOffset).Take(knownDataSize)
+                     .Any(value => value != 0))
+                throw new InvalidOperationException(
+                    "debug directory is absent and the known code cave is not clean");
+            cave = new CodeCave {
+                FileOffset = knownDataOffset,
+                Rva = knownDataRva,
+                Size = knownDataSize
+            };
+        }
+        return cave;
+    }
+
+    private static void WriteToken(List<byte> code, MetadataToken token)
+    {
+        code.AddRange(BitConverter.GetBytes(token.ToInt32()));
+    }
+
+    private static void SetMethodRva(byte[] image, MethodDefinition method,
+                                     int newRva)
+    {
+        int methodRow = GetMethodDefRowOffset(image, method);
+        int oldRva = BitConverter.ToInt32(image, methodRow);
+        if (oldRva != method.RVA)
+            throw new InvalidOperationException(
+                method.FullName + " MethodDef RVA verification failed");
+        Buffer.BlockCopy(BitConverter.GetBytes(newRva), 0, image, methodRow, 4);
+    }
+
+    private static byte[] BuildOptionsGamePadBody(TypeDefinition optionsPage,
+                                                   MethodDefinition baseScroll,
+                                                   MethodDefinition optionsScroll)
+    {
+        // The stack keeps the successful `isinst OptionsPage` result alive
+        // across both button comparisons, avoiding a second cast and keeping
+        // this wrapper small enough for a tiny IL method header.
+        List<byte> code = new List<byte>();
+        code.Add(0x02);             // ldarg.0
+        code.Add(0x75); WriteToken(code, optionsPage.MetadataToken); // isinst
+        code.Add(0x25);             // dup
+        code.Add(0x2c); int notOptionsBranch = code.Count; code.Add(0);
+        code.Add(0x03);             // ldarg.1
+        code.Add(0x17);             // ldc.i4.1 Buttons.DPadUp
+        code.Add(0x2e); int upBranch = code.Count; code.Add(0);
+        code.Add(0x03);             // ldarg.1
+        code.Add(0x18);             // ldc.i4.2 Buttons.DPadDown
+        code.Add(0x2e); int downBranch = code.Count; code.Add(0);
+        code.Add(0x26);             // pop OptionsPage
+        code.Add(0x2b); int fallbackBranch = code.Count; code.Add(0);
+        int notOptions = code.Count;
+        code.Add(0x26);             // pop null isinst result
+        int fallback = code.Count;
+        code.Add(0x02);             // ldarg.0
+        code.Add(0x03);             // ldarg.1
+        code.Add(0x28); WriteToken(code, baseScroll.MetadataToken); // call alias
+        code.Add(0x2a);             // ret
+        int up = code.Count;
+        code.Add(0x1f); code.Add(100); // up: +100
+        code.Add(0x6f); WriteToken(code, optionsScroll.MetadataToken); // callvirt
+        code.Add(0x2a);             // ret
+        int down = code.Count;
+        code.Add(0x1f); code.Add(unchecked((byte)-100)); // down: -100
+        code.Add(0x6f); WriteToken(code, optionsScroll.MetadataToken); // callvirt
+        code.Add(0x2a);             // ret
+
+        code[notOptionsBranch] = checked(
+            (byte)(sbyte)(notOptions - (notOptionsBranch + 1)));
+        code[upBranch] = checked((byte)(sbyte)(up - (upBranch + 1)));
+        code[downBranch] = checked((byte)(sbyte)(down - (downBranch + 1)));
+        code[fallbackBranch] = checked(
+            (byte)(sbyte)(fallback - (fallbackBranch + 1)));
+        return code.ToArray();
+    }
+
+    private static int PatchOptionsControllerScroll(byte[] image,
+                                                     ModuleDefinition module,
+                                                     CodeCave cave)
+    {
+        TypeDefinition optionsPage = module.GetType("StardewValley.Menus.OptionsPage");
+        TypeDefinition clickableMenu = module.GetType(
+            "StardewValley.Menus.IClickableMenu");
+        MethodDefinition receiveKey = optionsPage.Methods.Single(method =>
+            method.Name == "receiveKeyPress" && method.Parameters.Count == 1);
+        MethodDefinition baseGamePad = clickableMenu.Methods.Single(method =>
+            method.Name == "receiveGamePadButton" &&
+            method.Parameters.Count == 1);
+        MethodDefinition baseScroll = clickableMenu.Methods.Single(method =>
+            method.Name == "receiveScrollWheelAction" &&
+            method.Parameters.Count == 1);
+        MethodDefinition optionsScroll = optionsPage.Methods.Single(method =>
+            method.Name == "receiveScrollWheelAction" &&
+            method.Parameters.Count == 1);
+        if (!receiveKey.HasBody || receiveKey.Body.CodeSize != 1 ||
+            receiveKey.Body.Instructions.Count != 1 ||
+            receiveKey.Body.Instructions[0].OpCode.Code !=
+                Mono.Cecil.Cil.Code.Ret)
+            throw new InvalidOperationException("unexpected OptionsPage.receiveKeyPress body");
+        if (!baseGamePad.HasBody || baseGamePad.Body.CodeSize != 31 ||
+            !baseScroll.HasBody || baseScroll.Body.CodeSize != 1 ||
+            !optionsScroll.HasBody || optionsScroll.Body.CodeSize != 54)
+            throw new InvalidOperationException(
+                "unexpected controller/scroll method bodies");
+
+        byte[] code = BuildOptionsGamePadBody(
+            optionsPage, baseScroll, optionsScroll);
+        if (code.Length >= 64 || code.Length + 1 > cave.Size)
+            throw new InvalidOperationException("controller wrapper does not fit code cave");
+        image[cave.FileOffset] = checked((byte)((code.Length << 2) | 2));
+        Buffer.BlockCopy(code, 0, image, cave.FileOffset + 1, code.Length);
+
+        // Keep the original base implementation addressable through the
+        // otherwise no-op base wheel method, then redirect gamepad dispatch to
+        // the wrapper. Non-OptionsPage menus therefore retain byte-for-byte
+        // base B/close behavior.
+        SetMethodRva(image, baseScroll, baseGamePad.RVA);
+        SetMethodRva(image, baseGamePad, cave.Rva);
+        return cave.Rva;
+    }
+
     public static int Main(string[] args)
     {
         if (args.Length != 2)
@@ -91,33 +411,66 @@ internal static class PatchStardewOsk
             method.Parameters[0].ParameterType.FullName == textBox.FullName);
         MethodDefinition readyForSave = newDaySync.Methods.Single(method =>
             method.Name == "readyForSave" && method.Parameters.Count == 0);
+        MethodDefinition getText = textBox.Methods.Single(method =>
+            method.Name == "get_Text" && method.Parameters.Count == 0);
+        MethodDefinition getTitleText = textBox.Methods.Single(method =>
+            method.Name == "get_TitleText" && method.Parameters.Count == 0);
+        MethodDefinition setText = textBox.Methods.Single(method =>
+            method.Name == "set_Text" && method.Parameters.Count == 1);
+        MethodReference stringEquals = module.GetMemberReferences()
+            .OfType<MethodReference>().First(method =>
+                method.DeclaringType.FullName == "System.String" &&
+                method.Name == "op_Equality" && method.Parameters.Count == 2);
 
         if (!androidKeyboard.HasBody || androidKeyboard.Body.HasExceptionHandlers)
             throw new InvalidOperationException("unexpected ShowAndroidKeyboard body");
 
         byte[] image = File.ReadAllBytes(args[0]);
+        CodeCave codeCave = StripDebugDirectoryAndGetCodeCave(image, 64);
         int diskCodeSize;
         int codeOffset = GetCodeOffset(image, androidKeyboard, out diskCodeSize);
         if (diskCodeSize < 7)
             throw new InvalidOperationException("ShowAndroidKeyboard code size mismatch");
+        if (image[codeOffset] != 0x72)
+            throw new InvalidOperationException("expected initial ldstr in keyboard body");
+        int emptyStringToken = BitConverter.ToInt32(image, codeOffset + 1);
 
-        // ldarg.0; call Game1.showTextEntry(TextBox); ret; nop ...
+        // Clear only the localized placeholder (Text == TitleText), then open
+        // the game's own controller-friendly TextEntryMenu. Real names survive
+        // repeated clicks, matching the Android text-field behavior.
         Array.Clear(image, codeOffset, diskCodeSize);
-        image[codeOffset] = 0x02;
-        image[codeOffset + 1] = 0x28;
-        byte[] token = BitConverter.GetBytes(showTextEntry.MetadataToken.ToInt32());
-        Buffer.BlockCopy(token, 0, image, codeOffset + 2, token.Length);
-        image[codeOffset + 6] = 0x2a;
+        List<byte> keyboard = new List<byte>();
+        keyboard.Add(0x02); // ldarg.0
+        keyboard.Add(0x28); WriteToken(keyboard, getText.MetadataToken);
+        keyboard.Add(0x02); // ldarg.0
+        keyboard.Add(0x28); WriteToken(keyboard, getTitleText.MetadataToken);
+        keyboard.Add(0x28); WriteToken(keyboard, stringEquals.MetadataToken);
+        keyboard.Add(0x2c); int keepTextBranch = keyboard.Count; keyboard.Add(0);
+        keyboard.Add(0x02); // ldarg.0
+        keyboard.Add(0x72);
+        keyboard.AddRange(BitConverter.GetBytes(emptyStringToken));
+        keyboard.Add(0x28); WriteToken(keyboard, setText.MetadataToken);
+        int keepText = keyboard.Count;
+        keyboard.Add(0x02); // ldarg.0
+        keyboard.Add(0x28); WriteToken(keyboard, showTextEntry.MetadataToken);
+        keyboard.Add(0x2a); // ret
+        keyboard[keepTextBranch] = checked(
+            (byte)(sbyte)(keepText - (keepTextBranch + 1)));
+        if (keyboard.Count > diskCodeSize)
+            throw new InvalidOperationException("patched keyboard body does not fit");
+        Buffer.BlockCopy(keyboard.ToArray(), 0, image, codeOffset,
+                         keyboard.Count);
 
         // This Android build can wait forever in the network ready barrier on
         // an offline first save. NextOS has no online multiplayer backend, so
         // the offline port can acknowledge that barrier immediately.
         ReplaceBodyWithTrue(image, readyForSave);
+        int optionsRva = PatchOptionsControllerScroll(image, module, codeCave);
 
         File.WriteAllBytes(args[1], image);
         Console.WriteLine(
-            "patched OSK RVA 0x{0:x} and offline save barrier RVA 0x{1:x}",
-            androidKeyboard.RVA, readyForSave.RVA);
+            "patched OSK RVA 0x{0:x}, offline save RVA 0x{1:x}, options gamepad RVA 0x{2:x}",
+            androidKeyboard.RVA, readyForSave.RVA, optionsRva);
         return 0;
     }
 }

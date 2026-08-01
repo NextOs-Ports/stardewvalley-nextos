@@ -1,19 +1,28 @@
 # Stardew Valley (Android) — so-loader port — HANDOFF
 
-**Status em 2026-07-10:** port finalizado e jogável no NextOS
-Amlogic/Mali-450 de 1 GiB. `Runtime_init`, ativação Xamarin, lifecycle,
-GLES2 1280×720, áudio, controle, teclado interno, primeiro save e gameplay foram
-validados. O save gerado tem 3.047.058 bytes, `SaveGameInfo` tem 16.858 bytes e
-ambos passaram validação XML. No teste final o processo ficou sem swap relevante
-e entre aproximadamente 250 e 333 MiB RSS.
+**Status em 2026-08-01:** release universal v1.1.0 fechada e validada no aparelho
+ArkOS/RK3326/Mali-G31, além da bancada original Amlogic/Mali-450. `Runtime_init`,
+ativação Xamarin, lifecycle nativo, GLES, OpenAL, controles, criação de personagem,
+save e gameplay funcionam. O teste atual carregou um save real, percorreu a lista
+completa de Opções e voltou ao gameplay; o manifesto dos saves ficou idêntico antes
+e depois.
 
-O launcher final e
-padrao PortMaster simples em `ports_scripts/Stardew Valley.sh`: nao usa
-`systemctl`, nao mata/restaura ES e nao tem watchdog. A saida e feita no binario
-por `SELECT+START -> _exit(0)`, testada no device com retorno ao ES.
+O launcher PortMaster/NextOS agora resolve o diretório de forma portátil, impede
+instâncias duplicadas, migra/prepara os dados com NXExtract e escolhe o loader pelo
+firmware. Não usa `systemctl`, `setsid` nem perfil SDL/áudio fixo. O NextOS recebe o
+binário do sysroot atual (glibc 2.43 nesta release); ArkOS e outros CFWs externos
+recebem o build compatível (artefato atual GLIBC máx. 2.17). A saída continua no
+binário por `SELECT+START -> _exit(0)`.
 
-O restante deste documento preserva o histórico do bootstrap e deve ser lido
-como diagnóstico antigo, não como estado atual.
+Os dados proprietários são BYO-data. NXExtract 1.1.2 aceita APK/APKM/APKS/XAPK/ZIP,
+valida a árvore exata e confirma `libs`/`assets` transacionalmente. O hook portátil
+Python 3.7+ migra tanto o store original quanto os patches públicos anteriores para
+o hash final, sem tocar nos saves. O pacote público é montado por allowlist,
+reprodutível e auditado contra dados de jogo, logs, caminhos pessoais e procedência
+de build inválida.
+
+O restante deste documento preserva o histórico do bootstrap e deve ser lido como
+diagnóstico antigo, não como descrição do estado atual.
 
 ### Destravamentos posteriores ao handoff histórico
 
@@ -34,8 +43,15 @@ como diagnóstico antigo, não como estado atual.
   do payload. Isso removeu o pico de ~520 MiB e o atraso por faixa.
 - `SDL_GL_SetSwapInterval(1)` é aplicado com o contexto atual; o driver confirmou
   sucesso (`result=0`) e eliminou o tearing percebido como pequenos flickers.
-- `TextBox.ShowAndroidKeyboard` chama o `TextEntryMenu` interno do jogo, portanto
-  os campos de personagem/fazenda/favorito funcionam sem IME Android.
+- `TextBox.ShowAndroidKeyboard` chama o `TextEntryMenu` interno do jogo. Antes de
+  abrir, limpa somente quando `Text == TitleText`; assim os placeholders vermelhos
+  de personagem/fazenda/favorito somem como no Android e nomes reais sobrevivem a
+  reaberturas.
+- `IClickableMenu.receiveGamePadButton` tem um wrapper mínimo no code cave já
+  existente: quando a página atual é `OptionsPage`, D-pad Cima/Baixo chama o scroll
+  limitado da própria página. Todos os demais botões e menus preservam byte por
+  byte a lógica original. O caminho foi confirmado no runtime Android/MonoGame,
+  que entrega `Buttons.DPadUp/DPadDown` e não eventos `Keys`.
 - No port offline, `NewDaySynchronizer.readyForSave` confirma apenas a barreira
   de rede que ficava presa sem backend. O fake `Java.IO.File.get_UsableSpace`
   devolve o `statvfs` real; antes retornava zero e simulava disco cheio. O fluxo

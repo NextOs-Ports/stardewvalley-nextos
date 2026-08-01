@@ -28,7 +28,7 @@ const char *sdv_path_in_base(char *buf, size_t bufsz, const char *sub);
 static char fake_vm[0x1000];
 static char fake_env[0x1000];
 
-static int g_verbose = 1;
+static int g_verbose = 0;
 
 void jni_set_verbose(int on) { g_verbose = on; }
 
@@ -1876,7 +1876,7 @@ static void build_vm(void) {
 
 void *jni_build_env(void) {
     const char *v = getenv("SDV_JNI_VERBOSE");
-    if (v && (*v == '0')) g_verbose = 0;
+    g_verbose = v && v[0] && v[0] != '0';
     build_env();
     build_vm();
     return (void *)fake_vm;

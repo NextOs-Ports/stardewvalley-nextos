@@ -1,7 +1,7 @@
 #!/bin/bash
-# Build MULTI-DEVICE do so-loader do Stardew Valley (aarch64) no debian:buster
-# -> glibc 2.28 (<= 2.30, piso do ArkOS/R36S). O build.sh do host usa a toolchain
-# do NextOS e gera binario com glibc nova demais para os outros CFWs.
+# Build the explicitly external multi-device loader in Debian Buster.
+# This artifact is for ArkOS/R36S/other glibc<=2.30 CFWs only; build.sh remains
+# the mandatory current-NextOS sysroot route for stardewvalley.
 #
 # Run (host):
 #   SR=$(ls -d ~/NextOS-Elite-Edition/build*Amlogic-old*.aarch64*/toolchain/aarch64-libreelec-linux-gnu/sysroot | head -1)
@@ -14,6 +14,7 @@ set -e
 CC=${CC:-aarch64-linux-gnu-gcc}
 NM=${NM:-aarch64-linux-gnu-nm}
 OD=${OD:-aarch64-linux-gnu-objdump}
+READELF=${READELF:-aarch64-linux-gnu-readelf}
 NXSR=${NXSR:-/nxsr}
 OUT=${OUT:-stardewvalley.multi}
 cd "$(dirname "$0")"
@@ -61,3 +62,12 @@ $CC -O2 -fPIC -fno-omit-frame-pointer -rdynamic -o "$OUT" $OBJS $LIBS
 MAXV=$($OD -T "$OUT" 2>/dev/null | grep -oE 'GLIBC_[0-9.]+' | sort -uV | tail -1)
 echo "BUSTER BUILD OK -> $OUT | glibc max = $MAXV (regra: <= GLIBC_2.30)"
 $OD -p "$OUT" 2>/dev/null | grep -i NEEDED || true
+mkdir -p .build-provenance
+READELF="$READELF" python3 tools/build_provenance.py record \
+  --root "$PWD" \
+  --profile external-compat \
+  --binary "$PWD/$OUT" \
+  --compiler "$($CC --version | head -1)" \
+  --glibc-ceiling 2.30 \
+  --builder "debian:buster aarch64-linux-gnu cross toolchain" \
+  --output "$PWD/.build-provenance/external-compat.json"

@@ -1,0 +1,14 @@
+{
+  "binary": "stardewvalley.multi",
+  "binary_bytes": 156976,
+  "binary_sha256": "8efedebc953f59b04ca45975231c2a129dc0e936067a8a716ef46c01f64f2602",
+  "builder": "debian:buster aarch64-linux-gnu cross toolchain",
+  "compiler": "aarch64-linux-gnu-gcc (Debian 8.3.0-2) 8.3.0",
+  "elf_machine": "AArch64",
+  "elf_required_glibc_max": "2.17",
+  "format": 1,
+  "glibc_ceiling": "2.30",
+  "profile": "external-compat",
+  "source_digest": "c3dc11b46394d92cfeadf2396c5dd3958d9672efb898e56969b274b1bc1b624f",
+  "target": "external AArch64 CFW compatibility"
+}
