@@ -23,6 +23,31 @@ minutes). APK, APKM, APKS, XAPK and bundle ZIP inputs are accepted.
 
 **Exit the game: SELECT + START.**
 
+## v1.1.2 — RG-DS / ROCKNIX black-screen recovery
+
+- The complete reporter logs prove that the 394 MiB NXExtract transaction finished
+  successfully. On AArch64, its visual child now resolves the firmware SDL/Wayland
+  libraries first, following the physically working Horizon Chase setup path. Only new
+  NXExtract UI diagnostics from the current run are copied into `debug.log`.
+- The persistent game black screen had a separate, exact cause. Mesa accepts
+  `eglBindAPI(EGL_OPENGL_API)` even when SDL's current context is OpenGL ES 3.1.
+  MonoGame consequently classified GLES as desktop GL, failed its framebuffer capability
+  check and threw before the first frame.
+- The loader now hides only the leaked `dlsym(NULL, "eglBindAPI")` probe from the missing
+  desktop-GL library. MonoGame's own supported fallback selects GLES and resolves the
+  core framebuffer entry points through `libGLESv2`/SDL. It does not fake an extension,
+  unblock desktop GL or force a video backend.
+- Host policy tests and a real Mesa probe cover the regression: Mesa exposed no legacy
+  `GL_EXT_framebuffer_object` string, while its core FBO entry points produced a complete
+  framebuffer. RG-DS hardware confirmation of the release build is still pending.
+
+**Em português:** o log completo mostrou que a extração terminava corretamente, mas a
+interface podia ficar invisível; por isso o filho visual agora prioriza as bibliotecas do
+firmware. A tela preta persistente vinha depois: o Mesa aceitava o probe de OpenGL desktop
+e o MonoGame classificava errado o contexto GLES 3.1, abortando antes do primeiro frame.
+A v1.1.2 bloqueia somente esse probe vazado e deixa o fallback GLES nativo do MonoGame
+seguir. Não há extensão FBO falsa, backend de vídeo forçado nem mudança nos saves.
+
 ## v1.1.1 — new-farm zoom, arrow cursor and ROCKNIX setup
 
 - A brand-new farm now starts at the game's supported 0.75 zoom default. Existing
@@ -86,13 +111,17 @@ Questions, bug reports, help getting the port running, and news about the next o
 
 ### Status
 
-**Playable end to end**, with real saves, on two very different devices:
+**Playable end to end**, with real saves, on the validated devices below. The RG-DS
+fix in v1.1.2 was built from the community trace and the already-proven Horizon Chase
+and TASM2 ROCKNIX paths; a post-release hardware confirmation is still requested.
 
 | Device | Video | State |
 |---|---|---|
 | Mali-450 / Amlogic-old (EmuELEC, fbdev) | ES2 on fbdev, 1280×720 | playable, real save — the bench this port was born on |
 | R36S / ArkOS (RK3326, Mali-G31) | ES2 over an ES3 context, KMSDRM, 640×480 | playable, real save, controller/audio/video validated on 2026-08-01 |
-| Other AArch64 (Mesa/Panfrost, wayland, muOS…) | negotiated at runtime | should come up; no device here to confirm |
+| RG 40XX-H / muOS | firmware SDL/EGL/GLES | community-confirmed working beautifully with v1.1.1 |
+| RG-DS / ROCKNIX (Panfrost, Wayland, Mesa 26.1.2) | GLES 3.1/core FBO | v1.1.1 trace aborts before frame 1; v1.1.2 classification fix shipped, awaiting reporter retest |
+| Other AArch64 | negotiated at runtime | compatible route, not individually hardware-tested here |
 
 Character creation, the game's own controller keyboard, native Options scrolling, real
 saves, gameplay, OpenAL audio and VSync were exercised on hardware. A complete ArkOS
@@ -153,6 +182,7 @@ runtime.
 | phone-sized zoom (~13 tiles) | the fake `DisplayMetrics` reported a fixed 160 dpi | `MobileDisplay`'s real curve measured on hardware; dpi computed to pin the framing in tiles (`SDV_TILES_X`, default 15) |
 | a new farm looked closer than an existing save | Android stores the player's zoom per save, while a fresh `Options` object started at 1.0 | set only the new/default single-player value to the supported 0.75 minimum; loaded saves still overwrite it with their stored value |
 | ROCKNIX setup failed at 65% | the managed-store hook assumed the optional system `liblz4.so` existed | bundle an audited AArch64 LZ4 runtime requiring only GLIBC 2.17 and load it before any system fallback |
+| RG-DS stayed black during/after first setup | NXExtract's UI could inherit a compatibility SDL; afterward Mesa's global `eglBindAPI` made MonoGame misclassify the real GLES 3.1 context as desktop GL and reject core FBO support | isolate only the NXExtract child to firmware-first AArch64 libraries; hide the invalid null-handle desktop probe so MonoGame takes its native GLES path |
 
 ### Controls
 
@@ -194,18 +224,24 @@ it. Assets and saves are never part of Git or the public ZIP.
 ### Troubleshooting
 
 Every session writes `sdvnextos/debug.log` (previous run in `debug.prev.log`). The line
-that matters is:
+that matters after data setup is:
 
 ```
-[sdv-egl] ready 640x480 driver=KMSDRM ES2 a8 d24 s8 GL='OpenGL ES 3.2 …'
+[sdv-egl] ready 640x480 driver=wayland ES2 a8 d24 s8 GL='OpenGL ES 3.2 …'
 ```
 
-**Black screen** → check that `GL=` contains `OpenGL ES`. If it says `Mesa` without
-`ES`, the driver handed back desktop OpenGL and the shaders will not compile; the binary
-already refuses that context, but the log confirms it.
+**Black screen during the first setup** → do not power off while `debug.log` still shows
+`extracted ...`; that is NXExtract, not the game. Wait for `=== installation complete ===`.
+v1.1.2 also appends the last NXExtract UI diagnostics to the same log.
+**Black screen after installation** → check that the log reaches `[sdv-egl] ready` and
+that `GL=` contains `OpenGL ES`. In v1.1.1, the RG-DS trace then ended with
+`MonoGame requires either ARB_framebuffer_object or EXT_framebuffer_object`; this was an
+API-classification bug, not missing hardware support. v1.1.2 logs that the leaked global
+`eglBindAPI` probe was hidden and should continue through `surface 2 created` to
+`swap #1`.
 **No sound** → the game plays through OpenAL; backend order lives in `alsoft.conf`
 (`pipewire`, `pulse`, `alsa`). Force one with `AUDIO_DRIVER=alsa` or `AUDIO_DRIVER=pulse`.
-**NXExtract stopped at 65% on an older package** → install v1.1.1 over it and launch
+**NXExtract stopped at 65% on an older package** → install v1.1.2 over it and launch
 again. The validated stage is resumed and the bundled LZ4 runtime completes the hook.
 **Camera too close/far** → `SDV_TILES_X=15` controls the framing (screen width in tiles).
 
@@ -235,7 +271,7 @@ All knobs are environment variables, off by default; the full list is in
   (required reading before touching the port).
 - `stardewvalley` — loader built against the current NextOS sysroot (glibc 2.43).
 - `stardewvalley.multi` — explicit external-CFW loader built in Debian Buster (current
-  artifact max GLIBC 2.17; enforced ceiling GLIBC 2.30).
+  artifact and enforced ceiling: GLIBC 2.17).
 
 ### Build
 
@@ -275,13 +311,17 @@ supplied only by the user, from their own legal copy.
 
 ### Estado
 
-**Jogável do início ao fim**, com save real, em dois aparelhos bem diferentes:
+**Jogável do início ao fim**, com save real, nos aparelhos validados abaixo. A correção
+RG-DS da v1.1.2 foi construída a partir do log comunitário e dos caminhos ROCKNIX já
+aprovados do Horizon Chase e TASM2; ainda aguardamos o reteste físico pós-release.
 
 | Aparelho | Vídeo | Estado |
 |---|---|---|
 | Mali-450 / Amlogic-old (EmuELEC, fbdev) | ES2 em fbdev, 1280×720 | jogável, save real — é a bancada onde o port nasceu |
 | R36S / ArkOS (RK3326, Mali-G31) | ES2 sobre contexto ES3, KMSDRM, 640×480 | jogável, save real, controles/áudio/vídeo validados em 01/08/2026 |
-| Outros AArch64 (Mesa/Panfrost, wayland, muOS…) | negociado em runtime | deve subir; sem device aqui pra confirmar |
+| RG 40XX-H / muOS | SDL/EGL/GLES do firmware | comunidade confirmou funcionamento excelente na v1.1.1 |
+| RG-DS / ROCKNIX (Panfrost, Wayland, Mesa 26.1.2) | GLES 3.1/FBO core | log da v1.1.1 aborta antes do frame 1; correção de classificação v1.1.2 publicada, aguardando reteste |
+| Outros AArch64 | negociado em runtime | rota compatível, sem teste físico individual aqui |
 
 Criação de personagem, teclado do próprio jogo controlado pelo joystick, rolagem nativa
 das Opções, saves reais, gameplay, áudio OpenAL e VSync foram exercitados no aparelho.
@@ -341,6 +381,7 @@ de GLES, formato do backbuffer e backend de áudio são todos negociados em runt
 | zoom de celular (~13 tiles) | o `DisplayMetrics` fake reportava 160 dpi fixo | curva real do `MobileDisplay` medida no aparelho; dpi calculado pra fixar o enquadramento em tiles (`SDV_TILES_X`, padrão 15) |
 | fazenda nova aparecia mais perto que um save antigo | o Android serializa o zoom por save, mas um objeto `Options` novo começava em 1,0 | mudar somente o padrão novo/single-player para o mínimo suportado 0,75; saves carregados continuam sobrescrevendo com sua preferência |
 | instalação ROCKNIX falhava em 65% | o hook do assembly presumia que a `liblz4.so` opcional existia no sistema | levar um runtime LZ4 AArch64 auditado, dependente só de GLIBC 2.17, e usá-lo antes de qualquer fallback do sistema |
+| RG-DS ficava preto durante/depois da primeira preparação | a UI do NXExtract podia herdar SDL de compatibilidade; depois o `eglBindAPI` global do Mesa fazia o MonoGame classificar o contexto GLES 3.1 real como GL desktop e rejeitar FBO core | isolar somente o filho NXExtract com libs AArch64 firmware-first; ocultar o probe desktop inválido de handle nulo para o MonoGame seguir sua rota GLES nativa |
 
 ### Controles
 
@@ -382,18 +423,24 @@ e saves nunca entram no Git nem no ZIP público.
 ### Se algo não funcionar
 
 Cada sessão grava `sdvnextos/debug.log` (a anterior em `debug.prev.log`). A linha que
-importa é:
+importa depois da preparação dos dados é:
 
 ```
-[sdv-egl] ready 640x480 driver=KMSDRM ES2 a8 d24 s8 GL='OpenGL ES 3.2 …'
+[sdv-egl] ready 640x480 driver=wayland ES2 a8 d24 s8 GL='OpenGL ES 3.2 …'
 ```
 
-**Tela preta** → confira se o `GL=` contém `OpenGL ES`. Se vier `Mesa` sem `ES`, o driver
-entregou OpenGL de PC e os shaders não compilam; o binário já rejeita esse contexto, mas
-o log confirma.
+**Tela preta durante a primeira preparação** → não desligue enquanto o `debug.log` ainda
+mostrar `extracted ...`; isso é o NXExtract, não o jogo. Aguarde
+`=== installation complete ===`. A v1.1.2 também anexa ao log o diagnóstico visual do
+NXExtract.
+**Tela preta depois da instalação** → confirme que o log chegou a `[sdv-egl] ready` e
+que `GL=` contém `OpenGL ES`. Na v1.1.1, o log do RG-DS terminava depois com
+`MonoGame requires either ARB_framebuffer_object or EXT_framebuffer_object`; era erro de
+classificação da API, não falta de suporte da GPU. A v1.1.2 registra que ocultou o probe
+global `eglBindAPI` e deve avançar de `surface 2 created` até `swap #1`.
 **Sem som** → o jogo toca por OpenAL; a ordem de backends está no `alsoft.conf`
 (`pipewire`, `pulse`, `alsa`). Force um com `AUDIO_DRIVER=alsa` ou `AUDIO_DRIVER=pulse`.
-**NXExtract parou em 65% com um pacote antigo** → instale a v1.1.1 por cima e abra de
+**NXExtract parou em 65% com um pacote antigo** → instale a v1.1.2 por cima e abra de
 novo. O stage validado é retomado e o LZ4 incluído termina o hook.
 **Câmera muito perto ou muito longe** → `SDV_TILES_X=15` controla o enquadramento
 (largura da tela em tiles).
@@ -423,7 +470,7 @@ em [`INSTALAR.md`](INSTALAR.md).
   (leitura obrigatória antes de mexer no port).
 - `stardewvalley` — loader compilado contra o sysroot atual do NextOS (glibc 2.43).
 - `stardewvalley.multi` — loader explícito para CFWs externos, compilado no Debian
-  Buster (artefato atual GLIBC máx. 2.17; teto obrigatório GLIBC 2.30).
+  Buster (artefato atual e teto obrigatório: GLIBC 2.17).
 
 ### Compilar
 

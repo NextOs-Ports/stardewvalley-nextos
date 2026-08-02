@@ -1,11 +1,33 @@
 # Stardew Valley (Android) — so-loader port — HANDOFF
 
-**Status em 2026-08-01:** release universal v1.1.1 fechada e validada no aparelho
-ArkOS/RK3326/Mali-G31, além da bancada original Amlogic/Mali-450. `Runtime_init`,
+**Status em 2026-08-01:** release universal v1.1.2 preparada sobre a baseline validada no
+ArkOS/RK3326/Mali-G31 e na bancada original Amlogic/Mali-450. `Runtime_init`,
 ativação Xamarin, lifecycle nativo, GLES, OpenAL, controles, criação de personagem,
 save e gameplay funcionam. O teste atual carregou um save real, percorreu a lista
 completa de Opções e voltou ao gameplay; o manifesto dos saves ficou idêntico antes
 e depois.
+
+A v1.1.2 corrige o relato RG-DS/ROCKNIX/Panfrost em duas fronteiras comprovadas. A
+transação NXExtract de 394,3 MiB terminou e foi commitada; apenas sua interface visual
+podia ficar invisível. O filho AArch64 agora prioriza SDL/Wayland do firmware, copiando
+para `debug.log` somente o trecho novo de `ui.log`. Depois da instalação havia uma falha
+separada: com contexto real `OpenGL ES 3.1 Mesa 26.1.2`, o `libGL` bloqueado deixava
+handle nulo, mas `dlsym(NULL, "eglBindAPI")` encontrava a libEGL global. Mesa aceitava
+`EGL_OPENGL_API`, MonoGame marcava `BoundApi=GL`, não reconhecia o FBO core de ES 3.1 e
+lançava `PlatformNotSupportedException` antes do primeiro frame. O loader oculta somente
+esse lookup vazado depois que a bridge GLES está pronta; o catch/fallback nativo do
+MonoGame seleciona ES/libGLESv2. Um probe Mesa real confirmou ausência da string EXT,
+entrypoints core presentes e FBO completo. O RG-DS ainda precisa do reteste físico da
+release; o RG 40XX-H/muOS foi confirmado pela comunidade na v1.1.1.
+
+O segundo trace comunitário, em KMSDRM/Mali proprietário, não contém outro crash:
+chega a `swap #1`, faz três saves e sai pelo `_exit(0)` de SELECT+START. As mensagens
+`music CopyTo ... limitado`/`seek rapido` confirmam o workaround XACT (metadados de
+3436 bytes e `fseek`, sem ler fisicamente centenas de MiB); `*.XmlSerializers not found`
+são probes opcionais que caem no serializer dinâmico. Como as linhas de runtime não têm
+timestamp, o relato de uma pausa temporária de aproximadamente cinco minutos não pode
+ser correlacionado. Não houve mudança especulativa em áudio/save/serialização; se a pausa
+repetir, o próximo trace deve acrescentar tempo monotônico e amostragem de CPU/I/O.
 
 O launcher PortMaster/NextOS agora resolve o diretório de forma portátil, impede
 instâncias duplicadas, migra/prepara os dados com NXExtract e escolhe o loader pelo

@@ -96,7 +96,7 @@ python3 "$PORT_DIR/tools/build_provenance.py" combine \
 
 check_aarch64_glibc_ceiling() {
   local file=$1 ceiling=$2 newest
-  readelf -h "$file" | grep -q 'Machine:.*AArch64' ||
+  readelf -h "$file" | grep 'Machine:.*AArch64' >/dev/null ||
     fail "$file is not AArch64"
   newest=$(readelf --version-info "$file" 2>/dev/null |
     grep -oE 'GLIBC_[0-9]+([.][0-9]+)*' | sed 's/^GLIBC_//' |
@@ -107,12 +107,13 @@ check_aarch64_glibc_ceiling() {
 }
 
 readelf -h "$STAGE/ports/sdvnextos/stardewvalley" |
-  grep -q 'Machine:.*AArch64' || fail "NextOS loader is not AArch64"
+  grep 'Machine:.*AArch64' >/dev/null || fail "NextOS loader is not AArch64"
 readelf --version-info "$STAGE/ports/sdvnextos/stardewvalley" |
-  grep -q 'GLIBC_2[.]43' || fail "NextOS loader was not built for current glibc 2.43"
+  grep 'GLIBC_2[.]43' >/dev/null ||
+  fail "NextOS loader was not built for current glibc 2.43"
 check_aarch64_glibc_ceiling \
-  "$STAGE/ports/sdvnextos/stardewvalley.multi" 2.30
-check_aarch64_glibc_ceiling "$STAGE/ports/sdvnextos/nxextract-ui" 2.30
+  "$STAGE/ports/sdvnextos/stardewvalley.multi" 2.17
+check_aarch64_glibc_ceiling "$STAGE/ports/sdvnextos/nxextract-ui" 2.17
 check_aarch64_glibc_ceiling \
   "$STAGE/ports/sdvnextos/tools/liblz4.so.1" 2.17
 [ "$(sha256sum "$STAGE/ports/sdvnextos/tools/liblz4.so.1" | cut -d' ' -f1)" = \

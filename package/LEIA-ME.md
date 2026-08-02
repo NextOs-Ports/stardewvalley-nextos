@@ -1,4 +1,4 @@
-# Stardew Valley v1.1.1 (NextOS) — como instalar
+# Stardew Valley v1.1.2 (NextOS) — como instalar
 
 Port do **Stardew Valley de Android** rodando direto no Linux do seu portátil, por um
 so-loader próprio: sem Android, sem emulador, sem container.
@@ -51,7 +51,7 @@ Quem já usava o v1.0 pode instalar por cima: o novo preparador migra o assembly
 adota os dados existentes sem apagar ou reescrever os saves.
 
 Se a v1.1.0 parou em 65% no ROCKNIX com erro de `liblz4.so`, instale esta versão por
-cima e abra de novo. Os 394 MB já validados são retomados; a v1.1.1 leva seu próprio LZ4
+cima e abra de novo. Os 394 MB já validados são retomados; a v1.1.2 leva seu próprio LZ4
 AArch64 compatível com GLIBC 2.17.
 
 **Sair do jogo: SELECT + START.**
@@ -64,7 +64,8 @@ AArch64 compatível com GLIBC 2.17.
 |---|---|
 | Mali-450 / Amlogic (EmuELEC) | jogável, save real — é a bancada onde o port nasceu |
 | R36S / ArkOS (RK3326, Mali-G31) | jogável; teclado, scroll, áudio, vídeo e save validados em 01/08/2026 |
-| Outros AArch64 (Mesa/Panfrost, wayland, muOS…) | deve funcionar — o port negocia vídeo e áudio sozinho, mas ainda não foi confirmado em campo |
+| RG 40XX-H / muOS | comunidade confirmou funcionamento excelente na v1.1.1 |
+| RG-DS / ROCKNIX (Panfrost, Wayland) | correção de tela preta na v1.1.2; aguardando reteste do relator |
 
 O launcher escolhe entre dois binários auditados: sysroot atual/glibc 2.43 no NextOS e
 compatibilidade externa com GLIBC máx. 2.17 no artefato desta release.
@@ -87,9 +88,15 @@ Todo o diagnóstico está em `sdvnextos/debug.log` (a sessão anterior fica em
 
 Ela diz a resolução, o backend de vídeo e **com qual GPU** você está falando.
 
-**Tela preta** → veja se o `GL=` contém `OpenGL ES`. Se aparecer `Mesa` sem `ES`, o driver
-entregou OpenGL de PC e os shaders não compilam; o port já recusa esse contexto sozinho,
-mas o log confirma.
+**Tela preta enquanto instala** → se o log ainda mostra `extracted ...`, aguarde
+`=== installation complete ===`; o jogo ainda não iniciou. A v1.1.2 passa a usar a SDL
+AArch64 do firmware no NXExtract e anexa o diagnóstico da interface ao `debug.log`.
+
+**Tela preta depois de instalar** → veja se o log chegou a `[sdv-egl] ready` e se
+`GL=` contém `OpenGL ES`. Na v1.1.1, o RG-DS mostrava em seguida
+`MonoGame requires either ARB_framebuffer_object or EXT_framebuffer_object`: era uma
+classificação errada de GLES como OpenGL desktop, não falta de FBO na GPU. A v1.1.2
+oculta somente esse probe do Mesa e deixa o fallback GLES nativo seguir até `swap #1`.
 
 **Sem som** → o jogo toca por OpenAL e a ordem de backends está em `alsoft.conf`
 (`pipewire`, depois `pulse`, depois `alsa`). Force um com `AUDIO_DRIVER=alsa` ou

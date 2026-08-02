@@ -1,4 +1,4 @@
-# Stardew Valley v1.1.1 — instalação multi-device
+# Stardew Valley v1.1.2 — instalação multi-device
 
 So-loader próprio que roda o **Stardew Valley de Android** (Mono/.NET 8 AOT + MonoGame)
 direto no Linux do handheld, sem Android e sem container.
@@ -14,12 +14,13 @@ Este pacote traz **somente o nosso código**. Os dados do jogo (`assets/` e `lib
 |---|---|---|
 | Mali-450 / Amlogic-old (EmuELEC, fbdev) | ES2, fbdev | jogável, save real, é a bancada canônica |
 | R36S / ArkOS (RK3326, Mali-G31) | ES2 sobre contexto ES3, KMSDRM | jogável; teclado, scroll, áudio, vídeo e save validados em 01/08/2026 |
-| Mesa/Panfrost, wayland, outros AArch64 | negociado em runtime | deve subir; sem device pra confirmar |
+| RG 40XX-H / muOS | firmware nativo | confirmado pela comunidade na v1.1.1 |
+| RG-DS / ROCKNIX (Panfrost, Wayland, Mesa 26.1.2) | GLES 3.1/FBO core | correção v1.1.2; aguardando reteste pós-release |
 
 O launcher escolhe o binário certo. No NextOS/NextOS Elite usa `stardewvalley`, compilado
 obrigatoriamente no sysroot atual do projeto (glibc 2.43 nesta release). Nos demais CFWs
-usa `stardewvalley.multi`, compilado em Debian Buster (artefato atual: GLIBC máx. 2.17;
-teto auditado: 2.30).
+usa `stardewvalley.multi`, compilado em Debian Buster (artefato atual e teto auditado:
+GLIBC 2.17).
 
 ---
 
@@ -51,7 +52,7 @@ instalação terminar com sucesso.
 
 O extrator confere versão, ABI, árvore, tamanhos e fingerprint antes do commit. Um
 marcador verificado evita reextrações; instalações antigas do v1.0 são migradas e
-adotadas sem mexer nos saves. A v1.1.1 também retoma stages da v1.1.0 que pararam em 65%
+adotadas sem mexer nos saves. A v1.1.2 também retoma stages da v1.1.0 que pararam em 65%
 no ROCKNIX por falta de `liblz4.so`; não é necessário extrair os 394 MB novamente. Se
 os dados existentes estiverem inválidos, basta manter uma origem 1.6.15.3 suportada em
 `gamedata/` para o reparo transacional.
@@ -87,9 +88,16 @@ O log de cada sessão fica em `sdvnextos/debug.log` (a anterior em `debug.prev.l
 primeira coisa a ler é a linha `[sdv-egl] ready ... GL='...'`: ela diz com qual GPU e qual
 contexto você está falando.
 
-**Tela preta?** Confira se o `GL_VERSION` do log contém `OpenGL ES`. Se vier `Mesa` sem
-`ES`, é contexto desktop e os shaders não compilam — o binário já rejeita esse contexto,
-mas o log confirma.
+**Tela preta na primeira preparação?** Enquanto aparecer `extracted ...`, o NXExtract
+ainda está trabalhando. Aguarde `=== installation complete ===`; SELECT+START só existe
+depois que o jogo entra no loop. A v1.1.2 isola a SDL do extrator e inclui seu diagnóstico
+visual no `debug.log`.
+
+**Tela preta depois da instalação?** Confira se houve `[sdv-egl] ready` e se
+`GL_VERSION` contém `OpenGL ES`. O log ruim do RG-DS continuava com
+`MonoGame requires either ARB_framebuffer_object or EXT_framebuffer_object`: o Mesa
+aceitava um probe desktop e o MonoGame classificava errado o contexto GLES real. A
+v1.1.2 oculta só esse probe e usa o fallback GLES nativo; procure depois por `swap #1`.
 
 **Mudo?** O jogo toca por OpenAL; quem negocia o backend é o `alsoft.conf`
 (`drivers = pipewire,pulse,alsa`). Tente `AUDIO_DRIVER=alsa` ou `pulse`.

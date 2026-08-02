@@ -26,6 +26,7 @@
 #include <dlfcn.h>
 #include "so_util.h"
 #include "sdv_egl_bridge.h"
+#include "sdv_monogame_gl_policy.h"
 
 struct bionic_sigaction;
 extern int my_sigaction(int sig, const struct bionic_sigaction *act,
@@ -618,6 +619,17 @@ void *sdv_dlsym(void *handle, const char *name) {
         if (strcmp(name, "dlsym") == 0)   return &sdv_dlsym;
         if (strcmp(name, "dlclose") == 0) return &sdv_dlclose;
         if (strcmp(name, "dlerror") == 0) return &dlerror;
+        return NULL;
+    }
+    if (sdv_monogame_hide_global_egl_bind_api(
+            handle, name, sdv_egl_ready())) {
+        static int reported;
+        if (!reported) {
+            fprintf(stderr,
+                    "[sdv-egl] hidden global eglBindAPI from missing libGL "
+                    "probe; keeping existing GLES context\n");
+            reported = 1;
+        }
         return NULL;
     }
     /* Nunca entregue um handle do loader custom ao ld.so da glibc: se o

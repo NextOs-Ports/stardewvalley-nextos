@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build the explicitly external multi-device loader in Debian Buster.
-# This artifact is for ArkOS/R36S/other glibc<=2.30 CFWs only; build.sh remains
+# This artifact is for public/external AArch64 CFWs and is held to GLIBC 2.17;
+# build.sh remains
 # the mandatory current-NextOS sysroot route for stardewvalley.
 #
 # Run (host):
@@ -60,7 +61,7 @@ fi
 $CC -O2 -fPIC -fno-omit-frame-pointer -rdynamic -o "$OUT" $OBJS $LIBS
 
 MAXV=$($OD -T "$OUT" 2>/dev/null | grep -oE 'GLIBC_[0-9.]+' | sort -uV | tail -1)
-echo "BUSTER BUILD OK -> $OUT | glibc max = $MAXV (regra: <= GLIBC_2.30)"
+echo "BUSTER BUILD OK -> $OUT | glibc max = $MAXV (regra: <= GLIBC_2.17)"
 $OD -p "$OUT" 2>/dev/null | grep -i NEEDED || true
 mkdir -p .build-provenance
 READELF="$READELF" python3 tools/build_provenance.py record \
@@ -68,6 +69,6 @@ READELF="$READELF" python3 tools/build_provenance.py record \
   --profile external-compat \
   --binary "$PWD/$OUT" \
   --compiler "$($CC --version | head -1)" \
-  --glibc-ceiling 2.30 \
+  --glibc-ceiling 2.17 \
   --builder "debian:buster aarch64-linux-gnu cross toolchain" \
   --output "$PWD/.build-provenance/external-compat.json"

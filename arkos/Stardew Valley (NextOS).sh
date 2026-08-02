@@ -233,8 +233,9 @@ if [ -s "$GAMEDIR/debug.log" ]; then
   mv -f -- "$GAMEDIR/debug.log" "$GAMEDIR/debug.prev.log"
 fi
 exec > "$GAMEDIR/debug.log" 2>&1
-printf '=== %s | universal controller release | %s ===\n' \
-  "$PORTNAME" "$(date -Is 2>/dev/null || date)"
+release_version=$(command tr -d '\r\n' < "$GAMEDIR/version.txt" 2>/dev/null || true)
+printf '=== %s | release %s | %s ===\n' \
+  "$PORTNAME" "${release_version:-unknown}" "$(date -Is 2>/dev/null || date)"
 
 ${ESUDO:-} chmod +x \
   "$CURRENT_BIN" \
