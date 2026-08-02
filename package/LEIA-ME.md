@@ -1,4 +1,4 @@
-# Stardew Valley v1.1.2 (NextOS) — como instalar
+# Stardew Valley v1.1.3 (NextOS) — como instalar
 
 Port do **Stardew Valley de Android** rodando direto no Linux do seu portátil, por um
 so-loader próprio: sem Android, sem emulador, sem container.
@@ -28,6 +28,11 @@ roms/ports_scripts/Stardew Valley (NextOS).sh
 > As duas cópias do launcher são de propósito: o EmulationStation do EmuELEC/NextOS lê de
 > `ports_scripts/`, e o ArkOS/ROCKNIX/PortMaster lê de `ports/`. Deixe as duas — quem não
 > usa uma, ignora.
+
+Na v1.1.3 essas duas entradas são wrappers PortMaster mínimos e idênticos. A lógica
+multi-device existe uma única vez em `ports/sdvnextos/run.sh`, evitando um launcher
+visível enorme e divergências futuras. A atualização pode ser instalada por cima e não
+refaz os dados nem altera saves.
 
 ## 2. Ponha o seu pacote Android
 
@@ -67,8 +72,8 @@ AArch64 compatível com GLIBC 2.17.
 | RG 40XX-H / muOS | comunidade confirmou funcionamento excelente na v1.1.1 |
 | RG-DS / ROCKNIX (Panfrost, Wayland) | correção de tela preta na v1.1.2; aguardando reteste do relator |
 
-O launcher escolhe entre dois binários auditados: sysroot atual/glibc 2.43 no NextOS e
-compatibilidade externa com GLIBC máx. 2.17 no artefato desta release.
+O runtime interno escolhe entre dois binários auditados: sysroot atual/glibc 2.43 no
+NextOS e compatibilidade externa com GLIBC máx. 2.17 no artefato desta release.
 
 Nesta versão, clicar em Nome/Fazenda/Coisa Favorita limpa automaticamente apenas o texto
 vermelho de dica e abre o teclado interno. A última aba das Opções também rola inteira

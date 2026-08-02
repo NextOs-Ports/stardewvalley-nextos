@@ -1,6 +1,6 @@
 # Stardew Valley (Android) — so-loader port — HANDOFF
 
-**Status em 2026-08-01:** release universal v1.1.2 preparada sobre a baseline validada no
+**Status em 2026-08-02:** release universal v1.1.3 preparada sobre a baseline validada no
 ArkOS/RK3326/Mali-G31 e na bancada original Amlogic/Mali-450. `Runtime_init`,
 ativação Xamarin, lifecycle nativo, GLES, OpenAL, controles, criação de personagem,
 save e gameplay funcionam. O teste atual carregou um save real, percorreu a lista
@@ -29,10 +29,12 @@ timestamp, o relato de uma pausa temporária de aproximadamente cinco minutos n�
 ser correlacionado. Não houve mudança especulativa em áudio/save/serialização; se a pausa
 repetir, o próximo trace deve acrescentar tempo monotônico e amostragem de CPU/I/O.
 
-O launcher PortMaster/NextOS agora resolve o diretório de forma portátil, impede
-instâncias duplicadas, migra/prepara os dados com NXExtract e escolhe o loader pelo
-firmware. Não usa `systemctl`, `setsid` nem perfil SDL/áudio fixo. O NextOS recebe o
-binário do sysroot atual (glibc 2.43 nesta release); ArkOS e outros CFWs externos
+Na v1.1.3, os arquivos visíveis em `ports/` e `ports_scripts/` viraram wrappers POSIX
+mínimos e idênticos; ambos executam em foreground o único runtime
+`ports/sdvnextos/run.sh`. Esse runtime resolve o diretório pela própria localização,
+impede instâncias duplicadas, migra/prepara os dados com NXExtract e escolhe o loader
+pelo firmware. Não usa `systemctl`, `setsid` nem perfil SDL/áudio fixo. O NextOS recebe
+o binário do sysroot atual (glibc 2.43 nesta release); ArkOS e outros CFWs externos
 recebem o build compatível (artefato atual GLIBC máx. 2.17). A saída continua no
 binário por `SELECT+START -> _exit(0)`.
 

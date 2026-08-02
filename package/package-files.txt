@@ -15,6 +15,7 @@ ports/sdvnextos/nxextract-runtime-env.sh
 ports/sdvnextos/nxextract-ui
 ports/sdvnextos/nxextract.py
 ports/sdvnextos/run-extractor.sh
+ports/sdvnextos/run.sh
 ports/sdvnextos/stardewvalley
 ports/sdvnextos/stardewvalley.multi
 ports/sdvnextos/tools/liblz4.so.1

@@ -23,6 +23,21 @@ minutes). APK, APKM, APKS, XAPK and bundle ZIP inputs are accepted.
 
 **Exit the game: SELECT + START.**
 
+## v1.1.3 — standard thin PortMaster launcher
+
+- The visible entries in `ports/` and `ports_scripts/` are now identical 21-line POSIX
+  wrappers instead of two copies of the complete 325-line launcher.
+- All tested behavior lives once in `ports/sdvnextos/run.sh`: PortMaster integration,
+  single-instance lock, NXExtract, firmware/build selection, logging, foreground launch
+  and cleanup.
+- Both entry layouts resolve the same runtime relative to the ROM root and preserve
+  arguments, signals and exit status. Installing over v1.1.2 does not re-extract data or
+  touch saves.
+
+**Em português:** os arquivos que aparecem no menu agora seguem o formato enxuto do
+PortMaster. Toda a lógica multi-device continua intacta em um único `sdvnextos/run.sh`,
+sem duplicação e sem mexer nos dados ou saves.
+
 ## v1.1.2 — RG-DS / ROCKNIX black-screen recovery
 
 - The complete reporter logs prove that the 394 MiB NXExtract transaction finished
@@ -241,8 +256,9 @@ API-classification bug, not missing hardware support. v1.1.2 logs that the leake
 `swap #1`.
 **No sound** → the game plays through OpenAL; backend order lives in `alsoft.conf`
 (`pipewire`, `pulse`, `alsa`). Force one with `AUDIO_DRIVER=alsa` or `AUDIO_DRIVER=pulse`.
-**NXExtract stopped at 65% on an older package** → install v1.1.2 over it and launch
-again. The validated stage is resumed and the bundled LZ4 runtime completes the hook.
+**NXExtract stopped at 65% on an older package** → install v1.1.3 or newer over it and
+launch again. The validated stage is resumed and the bundled LZ4 runtime completes the
+hook.
 **Camera too close/far** → `SDV_TILES_X=15` controls the framing (screen width in tiles).
 
 For a one-shot developer capture of the actual GPU backbuffer, create
@@ -257,7 +273,8 @@ All knobs are environment variables, off by default; the full list is in
 
 - `src/` — the ELF loader, Bionic→glibc shims, fake JNI/JavaVM, EGL/GLES bridge, fake
   asset manager and input.
-- `arkos/` — the launcher (PortMaster layout, works on EmuELEC too) and `alsoft.conf`.
+- `arkos/` — the thin PortMaster/EmuELEC entry wrapper and `alsoft.conf`.
+- `run.sh` — the single internal multi-device runtime used by both launcher locations.
 - `nxextract.py`, `nxextract-ui`, `extractor.json` and `run-extractor.sh` — NXExtract
   1.1.2 plus this game's exact transactional recipe.
 - `package/` — the deterministic release ZIP builder, allowlist and public-data audit.
@@ -440,8 +457,8 @@ classificação da API, não falta de suporte da GPU. A v1.1.2 registra que ocul
 global `eglBindAPI` e deve avançar de `surface 2 created` até `swap #1`.
 **Sem som** → o jogo toca por OpenAL; a ordem de backends está no `alsoft.conf`
 (`pipewire`, `pulse`, `alsa`). Force um com `AUDIO_DRIVER=alsa` ou `AUDIO_DRIVER=pulse`.
-**NXExtract parou em 65% com um pacote antigo** → instale a v1.1.2 por cima e abra de
-novo. O stage validado é retomado e o LZ4 incluído termina o hook.
+**NXExtract parou em 65% com um pacote antigo** → instale a v1.1.3 ou mais recente por
+cima e abra de novo. O stage validado é retomado e o LZ4 incluído termina o hook.
 **Câmera muito perto ou muito longe** → `SDV_TILES_X=15` controla o enquadramento
 (largura da tela em tiles).
 
@@ -456,7 +473,8 @@ em [`INSTALAR.md`](INSTALAR.md).
 
 - `src/` — o loader ELF, os shims Bionic→glibc, a JNI/JavaVM fake, a ponte EGL/GLES, o
   asset manager fake e o input.
-- `arkos/` — o launcher (layout PortMaster, serve no EmuELEC também) e o `alsoft.conf`.
+- `arkos/` — o wrapper enxuto de entrada PortMaster/EmuELEC e o `alsoft.conf`.
+- `run.sh` — o runtime multi-device interno único usado pelos dois locais de launcher.
 - `nxextract.py`, `nxextract-ui`, `extractor.json` e `run-extractor.sh` — NXExtract
   1.1.2 e a receita transacional exata deste jogo.
 - `package/` — montador determinístico do ZIP, allowlist e auditoria de dados públicos.

@@ -1,4 +1,4 @@
-# Stardew Valley v1.1.2 — instalação multi-device
+# Stardew Valley v1.1.3 — instalação multi-device
 
 So-loader próprio que roda o **Stardew Valley de Android** (Mono/.NET 8 AOT + MonoGame)
 direto no Linux do handheld, sem Android e sem container.
@@ -29,6 +29,7 @@ GLIBC 2.17).
 ```
 <roms>/ports/Stardew Valley (NextOS).sh      <- launcher (deste zip: arkos/)
 <roms>/ports/sdvnextos/
+    run.sh                                  <- runtime único chamado pelos dois launchers
     stardewvalley / stardewvalley.multi      <- loaders deste zip
     nxextract.py / nxextract-ui              <- preparação visual e transacional
     extractor.json                           <- receita exata do Stardew 1.6.15.3
@@ -57,10 +58,11 @@ no ROCKNIX por falta de `liblz4.so`; não é necessário extrair os 394 MB novam
 os dados existentes estiverem inválidos, basta manter uma origem 1.6.15.3 suportada em
 `gamedata/` para o reparo transacional.
 
-O launcher acha o `<roms>` sozinho (`$directory` do PortMaster, `/roms`, `/storage/roms`, ou
-o diretório do próprio script). O binário confirma pela própria localização
-(`/proc/self/exe`) — não há caminho de aparelho cravado em lugar nenhum, e as libs do Mono
-são procuradas tanto na raiz do port quanto em `libs/`.
+Os launchers mínimos em `ports/` e `ports_scripts/` acham `sdvnextos/run.sh` pela própria
+localização, com fallback para `/roms`, `/roms2` e `/storage/roms`. O runtime usa sua
+própria pasta como `GAMEDIR`, e o binário confirma a localização por `/proc/self/exe` —
+não há caminho de aparelho cravado em lugar nenhum. As libs do Mono são procuradas tanto
+na raiz do port quanto em `libs/`.
 
 ---
 

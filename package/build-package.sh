@@ -13,12 +13,12 @@ fail() {
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 PORT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd -P)
 ALLOWLIST="$SCRIPT_DIR/package-files.txt"
-SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1785542400}
+SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1785628800}
 OUTPUT=${1:-"$SCRIPT_DIR/dist/stardewvalley.zip"}
 RELEASE=$(tr -d '\r\n' < "$PORT_DIR/version.txt")
 
 for tool in bash cmp comm cut find grep install mktemp python3 readelf rm \
-            sed sha256sum sort touch unzip zip; do
+            sed sh sha256sum sort touch unzip wc zip; do
   command -v "$tool" >/dev/null 2>&1 || fail "missing host tool: $tool"
 done
 case "$SOURCE_DATE_EPOCH" in
@@ -63,6 +63,7 @@ put 0755 "$PORT_DIR/stardewvalley" "ports/sdvnextos/stardewvalley"
 put 0755 "$PORT_DIR/stardewvalley.multi" "ports/sdvnextos/stardewvalley.multi"
 put 0644 "$PORT_DIR/arkos/alsoft.conf" "ports/sdvnextos/alsoft.conf"
 put 0644 "$PORT_DIR/extractor.json" "ports/sdvnextos/extractor.json"
+put 0755 "$PORT_DIR/run.sh" "ports/sdvnextos/run.sh"
 put 0755 "$PORT_DIR/run-extractor.sh" "ports/sdvnextos/run-extractor.sh"
 put 0755 "$PORT_DIR/nxextract-runtime-env.sh" \
   "ports/sdvnextos/nxextract-runtime-env.sh"
@@ -120,8 +121,13 @@ check_aarch64_glibc_ceiling \
   "a65c53e2e7015b636e4f212449eff2016b99736cdf5798fe2cf3672818b88b8b" ] ||
   fail "bundled liblz4 does not match the audited Debian arm64 artifact"
 
-bash -n "$STAGE/ports/$LAUNCHER"
-bash -n "$STAGE/ports_scripts/$LAUNCHER"
+sh -n "$STAGE/ports/$LAUNCHER"
+sh -n "$STAGE/ports_scripts/$LAUNCHER"
+cmp -s "$STAGE/ports/$LAUNCHER" "$STAGE/ports_scripts/$LAUNCHER" ||
+  fail "ports and ports_scripts launchers differ"
+[ "$(wc -c < "$STAGE/ports/$LAUNCHER")" -le 2048 ] ||
+  fail "visible PortMaster launcher is no longer thin"
+bash -n "$STAGE/ports/sdvnextos/run.sh"
 bash -n "$STAGE/ports/sdvnextos/run-extractor.sh"
 bash -n "$STAGE/ports/sdvnextos/nxextract-runtime-env.sh"
 python3 - "$STAGE/ports/sdvnextos/nxextract.py" \
@@ -136,12 +142,14 @@ python3 "$STAGE/ports/sdvnextos/nxextract.py" recipe-check \
 
 if grep -En '^[[:space:]]*(export[[:space:]]+)?SDL_(VIDEO|AUDIO)DRIVER=' \
     "$STAGE/ports/$LAUNCHER" \
+    "$STAGE/ports/sdvnextos/run.sh" \
     "$STAGE/ports/sdvnextos/nxextract-runtime-env.sh"; then
   fail "release must not force an SDL video or audio backend"
 fi
 if grep -En \
     '(^|[[:space:]])(setsid|nohup|systemctl[[:space:]]+(stop|mask))([[:space:]]|$)' \
-    "$STAGE/ports/$LAUNCHER"; then
+    "$STAGE/ports/$LAUNCHER" \
+    "$STAGE/ports/sdvnextos/run.sh"; then
   fail "launcher contains a forbidden lifecycle command"
 fi
 if find "$STAGE" \( \
