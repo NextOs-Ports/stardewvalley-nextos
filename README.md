@@ -23,6 +23,31 @@ minutes). APK, APKM, APKS, XAPK and bundle ZIP inputs are accepted.
 
 **Exit the game: SELECT + START.**
 
+## v1.1.5 — first-install fix for v1.1.4
+
+v1.1.4 trimmed the launcher and, in doing so, shortened the `chmod +x` list to the two
+loaders and the NXExtract entry points. That was wrong. `nxextract-runtime-env.sh` runs
+`run-extractor.sh` **directly**, and `run-extractor.sh` only performs the assembly-store
+migration when `tools/prepare_stardew_data.py` passes an `[ -x ... ]` test — so without the
+executable bit that migration was **skipped silently**: nothing failed, the data simply was
+not migrated.
+
+- The full v1.1.3 `chmod +x` list is restored, along with the `[ ! -L ]` symlink guard on
+  the sourced NXExtract helper, the `extractor.json` presence check and the `uname -m`
+  validation.
+- `tests/launcher_permissions_test.sh` is new and asserts every one of those files ends up
+  executable, plus that a symlinked helper is refused. It fails against v1.1.4.
+- **Only first installs and migrations were affected**; an already-prepared game never
+  reaches that code. Devices whose ROM partition is FAT/exFAT were never affected either,
+  because every file there is already 0777.
+
+**Em português:** a v1.1.4 encurtou demais a lista de `chmod +x` do launcher, e sem o bit de
+execução em `tools/prepare_stardew_data.py` a migração do assembly store era **pulada em
+silêncio** — nada dava erro, os dados só não migravam. A lista completa da v1.1.3 volta,
+junto com a guarda de symlink, a checagem do `extractor.json` e a validação do `uname -m`.
+Só afetava instalação nova e migração; quem já tinha os dados preparados nunca passava por
+ali, e cartão FAT/exFAT também não era afetado.
+
 ## v1.1.4 — real-time zoom on the D-pad and a launcher that stays out of the way
 
 - **Zoom while you play**: hold **D-pad Up** to move the camera in, **D-pad Down** to

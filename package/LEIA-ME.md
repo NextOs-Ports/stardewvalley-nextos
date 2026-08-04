@@ -1,4 +1,4 @@
-# Stardew Valley v1.1.4 (NextOS) — como instalar
+# Stardew Valley v1.1.5 (NextOS) — como instalar
 
 Port do **Stardew Valley de Android** rodando direto no Linux do seu portátil, por um
 so-loader próprio: sem Android, sem emulador, sem container.

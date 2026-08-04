@@ -36,6 +36,7 @@ if [ -f "$controlfolder/control.txt" ]; then
   declare -F get_controls >/dev/null 2>&1 && get_controls
 fi
 : "${ESUDO:=}"
+: "${CUR_TTY:=/dev/tty0}"
 
 # Sem terminal na mao do usuario, todo erro vira "tela preta": o log e' a unica
 # forma de diagnosticar um lancamento pelo menu.
@@ -48,20 +49,45 @@ printf '=== Stardew Valley (NextOS) | release %s | %s ===\n' \
 
 launcher_error() { printf 'Stardew Valley: %s\n' "$*" >&2; exit 1; }
 
-$ESUDO chmod +x "$GAMEDIR/stardewvalley" "$GAMEDIR/stardewvalley.multi" \
-  "$GAMEDIR/nxextract.py" "$GAMEDIR/nxextract-ui" 2>/dev/null || true
-$ESUDO chmod 666 /dev/uinput 2>/dev/null || true
+# A lista tem de ser COMPLETA (regressao corrigida na v1.1.5). O
+# `nxextract-runtime-env.sh` executa `run-extractor.sh` diretamente, e o proprio
+# `run-extractor.sh` so' roda a migracao do assembly store se
+# `tools/prepare_stardew_data.py` passar num `[ -x ... ]` — sem o bit, a migracao
+# e' pulada EM SILENCIO. Cartao FAT/exFAT esconde o problema (tudo la' e' 0777);
+# ROM partition ext4, ou um ZIP extraido sem preservar modos, nao.
+$ESUDO chmod +x \
+  "$GAMEDIR/stardewvalley" \
+  "$GAMEDIR/stardewvalley.multi" \
+  "$GAMEDIR/run.sh" \
+  "$GAMEDIR/run-extractor.sh" \
+  "$GAMEDIR/nxextract.py" \
+  "$GAMEDIR/nxextract-ui" \
+  "$GAMEDIR/nxextract-runtime-env.sh" \
+  "$GAMEDIR/tools/prepare_stardew_data.py" \
+  2>/dev/null || true
+# O dialogo do PortMaster escreve no TTY do frontend. Isto NAO para nem
+# reinicia o EmulationStation.
+$ESUDO chmod 666 "$CUR_TTY" /dev/uinput 2>/dev/null || true
 
 # Preparacao BYO-data (NXExtract): extrai/valida os assets a partir do APK do
 # usuario. E' o unico passo que nao pode faltar.
-[ -f "$GAMEDIR/nxextract-runtime-env.sh" ] ||
-  launcher_error "NXExtract runtime helper ausente"
+[ -f "$GAMEDIR/extractor.json" ] ||
+  launcher_error "receita do extrator ausente no diretorio do jogo"
+extractor_env=$GAMEDIR/nxextract-runtime-env.sh
+# `[ ! -L ]`: o helper e' carregado com `source`, entao um symlink plantado no
+# lugar dele executaria codigo arbitrario como o jogo. Guarda herdada da v1.1.3.
+[ -f "$extractor_env" ] && [ ! -L "$extractor_env" ] ||
+  launcher_error "NXExtract runtime helper ausente ou inseguro"
 # shellcheck source=nxextract-runtime-env.sh
-source "$GAMEDIR/nxextract-runtime-env.sh"
+source "$extractor_env"
 declare -F sdv_run_extractor >/dev/null 2>&1 ||
   launcher_error "NXExtract runtime helper incompleto"
-sdv_run_extractor "$GAMEDIR" "$controlfolder" / "$(uname -m)" ||
-  launcher_error "preparacao dos dados falhou ($?)"
+machine=$(uname -m 2>/dev/null) ||
+  launcher_error "nao foi possivel identificar a arquitetura"
+sdv_run_extractor "$GAMEDIR" "$controlfolder" / "$machine" || {
+  status=$?
+  launcher_error "preparacao dos dados falhou ($status)"
+}
 [ "${SDV_EXTRACTOR_ONLY:-0}" = 1 ] && exit 0
 
 # NextOS usa a glibc atual do sistema; nos demais CFW vale o binario compat.

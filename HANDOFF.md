@@ -1,6 +1,6 @@
 # Stardew Valley (Android) — so-loader port — HANDOFF
 
-**Status em 2026-08-04:** release universal v1.1.4 preparada sobre a baseline validada no
+**Status em 2026-08-04:** release universal v1.1.5 preparada sobre a baseline validada no
 ArkOS/RK3326/Mali-G31 e na bancada original Amlogic/Mali-450. `Runtime_init`,
 ativação Xamarin, lifecycle nativo, GLES, OpenAL, controles, criação de personagem,
 save e gameplay funcionam. O teste atual carregou um save real, percorreu a lista
@@ -38,7 +38,7 @@ atual (glibc 2.43 nesta release); ArkOS e outros CFWs externos recebem o build
 compatível (artefato atual GLIBC máx. 2.17). A saída continua no binário por
 `SELECT+START -> _exit(0)`.
 
-Na v1.1.4 esse runtime caiu de 305 para 110 linhas. Saíram a trava de lançamento, o
+Na v1.1.4 esse runtime caiu de 305 para 141 linhas. Saíram a trava de lançamento, o
 matador de instância anterior e todo o ciclo ES/TTY/`pm_finish`: no ArkOS o próprio
 EmulationStation lança o port com
 `sudo perfmax %GOVERNOR% %ROM%; nice -n -19 /usr/local/bin/AltSDL.sh %ROM%; sudo perfnorm`
@@ -48,6 +48,18 @@ A remoção corrige uma falha real: o antigo `stop_existing_game` matava qualque
 cujo executável casasse `*/ports/sdvnextos/stardewvalley*`, de modo que um segundo
 lançamento derrubava com `SIGKILL` uma sessão já em gameplay — assinatura visível no log
 como três `Killed` seguidos, incluindo subshells do `funcs.txt` do PortMaster.
+
+**Regressão da v1.1.4, corrigida na v1.1.5.** Ao encurtar o launcher, a lista de
+`chmod +x` foi reduzida aos dois loaders e aos entry points do NXExtract. Isso quebra o
+caminho de primeira instalação: `nxextract-runtime-env.sh` executa `run-extractor.sh`
+diretamente, e `run-extractor.sh` só roda a migração do assembly store quando
+`tools/prepare_stardew_data.py` passa num `[ -x ... ]` — sem o bit, a migração é pulada
+**em silêncio**, sem erro algum. A lista completa voltou, junto com a guarda `[ ! -L ]` do
+helper carregado por `source`, a checagem de `extractor.json` e a validação de `uname -m`.
+Armadilha de bancada que escondeu isso: o `/roms` do ArkOS de teste é **exfat com
+`fmask=0000`**, então todo arquivo é sempre 0777 e `chmod` não tem efeito observável —
+qualquer teste de permissão feito só ali dá falso positivo. O
+`tests/launcher_permissions_test.sh` cobre isso em ext4 e falha contra a v1.1.4.
 
 **Perfil de memória medido no ArkOS (RG351MP/R36S, 639 MB, ES parado, 2026-08-04.)**
 A pausa sem explicação do trace anterior foi instrumentada com relógio de parede e

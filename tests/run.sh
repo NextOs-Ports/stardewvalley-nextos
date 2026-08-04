@@ -12,6 +12,7 @@ sh -n "$REPO/arkos/Stardew Valley (NextOS).sh"
 bash -n "$REPO/run.sh"
 bash -n "$REPO/nxextract-runtime-env.sh"
 bash "$REPO/tests/launcher_wrapper_test.sh"
+bash "$REPO/tests/launcher_permissions_test.sh"
 bash "$REPO/tests/runtime_environment_test.sh"
 ${CC:-cc} -std=c99 -Wall -Wextra -Werror -I "$REPO/src" \
   "$REPO/tests/monogame_gl_policy_test.c" \
