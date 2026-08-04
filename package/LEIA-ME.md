@@ -1,4 +1,4 @@
-# Stardew Valley v1.1.3 (NextOS) — como instalar
+# Stardew Valley v1.1.4 (NextOS) — como instalar
 
 Port do **Stardew Valley de Android** rodando direto no Linux do seu portátil, por um
 so-loader próprio: sem Android, sem emulador, sem container.
@@ -29,10 +29,12 @@ roms/ports_scripts/Stardew Valley (NextOS).sh
 > `ports_scripts/`, e o ArkOS/ROCKNIX/PortMaster lê de `ports/`. Deixe as duas — quem não
 > usa uma, ignora.
 
-Na v1.1.3 essas duas entradas são wrappers PortMaster mínimos e idênticos. A lógica
+Desde a v1.1.3 essas duas entradas são wrappers PortMaster mínimos e idênticos. A lógica
 multi-device existe uma única vez em `ports/sdvnextos/run.sh`, evitando um launcher
-visível enorme e divergências futuras. A atualização pode ser instalada por cima e não
-refaz os dados nem altera saves.
+visível enorme e divergências futuras. Na v1.1.4 esse runtime também deixou de mexer no
+frontend: parar e devolver o EmulationStation é tarefa do PortMaster e do lançador de
+ports de cada sistema, não do jogo. A atualização pode ser instalada por cima e não refaz
+os dados nem altera saves.
 
 ## 2. Ponha o seu pacote Android
 
@@ -75,10 +77,14 @@ AArch64 compatível com GLIBC 2.17.
 O runtime interno escolhe entre dois binários auditados: sysroot atual/glibc 2.43 no
 NextOS e compatibilidade externa com GLIBC máx. 2.17 no artefato desta release.
 
-Nesta versão, clicar em Nome/Fazenda/Coisa Favorita limpa automaticamente apenas o texto
-vermelho de dica e abre o teclado interno. A última aba das Opções também rola inteira
-com o D-pad. O analógico direito ganhou uma seta pixel-art, e fazendas novas começam no
-zoom 0,75 sem alterar a preferência de saves antigos.
+Clicar em Nome/Fazenda/Coisa Favorita limpa automaticamente apenas o texto vermelho de
+dica e abre o teclado interno. O analógico direito ganhou uma seta pixel-art, e fazendas
+novas começam no zoom 0,75 sem alterar a preferência de saves antigos.
+
+**Novo na v1.1.4:** segure **D-pad cima** para aproximar a câmera e **D-pad baixo** para
+afastar, entre 0,40× e 2,5×. Andar e navegar em menus ficam no **analógico esquerdo** —
+inclusive a rolagem inteira da última aba das Opções. Se preferir o D-pad todo como
+movimento, igual à v1.1.3, use `SDV_DPAD_ZOOM=0`.
 
 ---
 

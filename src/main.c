@@ -340,6 +340,154 @@ void sdv_promote_current_mono_thread(void) {
             exception ? " (com excecao gerenciada)" : "");
 }
 
+/* ---- Zoom em tempo real no D-pad (estilo Terraria) -------------------------
+ * O zoom do Stardew mobile e' o gesto de pinca, que nao existe aqui (nosso
+ * MotionEvent fake e' single-pointer). Em vez de sintetizar pinca, mexemos no
+ * mesmo estado gerenciado que a pinca mexeria, via mono embedding (a thread
+ * principal ja executa codigo managed, entao mono_runtime_invoke e' seguro):
+ *
+ *   PinchZoom.Instance.SetZoomLevel(z)   (estado da pinca coerente)
+ *   Game1.options.desiredBaseZoomLevel=z (SO o desired!)
+ *
+ * O Game1._update ve desired != base e faz ELE MESMO: base = desired,
+ * forceSnapOnNextViewportUpdate = true e refreshWindowSettings() — que
+ * redimensiona viewport, render target e lightmap. Escrever baseZoomLevel
+ * direto PULA esse refresh e o mundo fica renderizado num retangulo do
+ * tamanho antigo (canto superior esquerdo + resto preto).
+ * Limites: a pinca real permite ate' clientBounds/4096 (~0.16 em 640x480),
+ * mas zoom muito aberto explode custo de draw no handheld; piso conservador. */
+#define SDV_ZOOM_BASE_MIN   0.40f    /* piso ao ar livre (custo de draw) */
+#define SDV_ZOOM_BASE_MAX   2.5f
+#define SDV_ZOOM_PERIOD     0.05     /* 20 aplicacoes/s enquanto segurado */
+#define SDV_ZOOM_STEP       1.038f   /* por aplicacao = ~2.1x/s, como antes */
+
+struct sdv_zoom_ctx {
+    int state;                      /* 0=nao inicializado, 1=ok, -1=falhou */
+    void *(*image_loaded)(const char *);
+    void *(*class_from_name)(void *, const char *, const char *);
+    void *(*class_get_method)(void *, const char *, int);
+    void *(*runtime_invoke)(void *, void *, void **, void **);
+    void *(*object_unbox)(void *);
+    void *get_options;              /* Game1.get_options (static) */
+    void *get_desired;              /* Options.get_desiredBaseZoomLevel */
+    void *set_desired;              /* Options.set_desiredBaseZoomLevel */
+    void *pz_get_instance;          /* PinchZoom.get_Instance (static) */
+    void *pz_set_zoom;              /* PinchZoom.SetZoomLevel */
+    float level;                    /* zoom que NOS escrevemos por ultimo */
+};
+
+static struct sdv_zoom_ctx g_zoom;
+
+static int sdv_zoom_init(void) {
+    if (g_zoom.state) return g_zoom.state > 0;
+    g_zoom.state = -1;
+
+    g_zoom.image_loaded = (void *(*)(const char *))
+        tbl_find(g_resolv_tbl, g_resolv_n, "mono_image_loaded");
+    g_zoom.class_from_name = (void *(*)(void *, const char *, const char *))
+        tbl_find(g_resolv_tbl, g_resolv_n, "mono_class_from_name");
+    g_zoom.class_get_method = (void *(*)(void *, const char *, int))
+        tbl_find(g_resolv_tbl, g_resolv_n, "mono_class_get_method_from_name");
+    g_zoom.runtime_invoke = (void *(*)(void *, void *, void **, void **))
+        tbl_find(g_resolv_tbl, g_resolv_n, "mono_runtime_invoke");
+    g_zoom.object_unbox = (void *(*)(void *))
+        tbl_find(g_resolv_tbl, g_resolv_n, "mono_object_unbox");
+    if (!g_zoom.image_loaded || !g_zoom.class_from_name ||
+        !g_zoom.class_get_method || !g_zoom.runtime_invoke ||
+        !g_zoom.object_unbox) {
+        fprintf(stderr, "[sdv-zoom] embedding API incompleta\n");
+        return 0;
+    }
+
+    void *image = g_zoom.image_loaded("StardewValley");
+    if (!image) {
+        /* assembly ainda nao carregada; tenta de novo no proximo aperto */
+        g_zoom.state = 0;
+        return 0;
+    }
+    void *game1 = g_zoom.class_from_name(image, "StardewValley", "Game1");
+    void *options = g_zoom.class_from_name(image, "StardewValley", "Options");
+    void *pinch = g_zoom.class_from_name(image, "StardewValley.Mobile",
+                                         "PinchZoom");
+    if (!game1 || !options || !pinch) {
+        fprintf(stderr, "[sdv-zoom] classes nao encontradas (g=%p o=%p p=%p)\n",
+                game1, options, pinch);
+        return 0;
+    }
+    g_zoom.get_options = g_zoom.class_get_method(game1, "get_options", 0);
+    g_zoom.get_desired =
+        g_zoom.class_get_method(options, "get_desiredBaseZoomLevel", 0);
+    g_zoom.set_desired =
+        g_zoom.class_get_method(options, "set_desiredBaseZoomLevel", 1);
+    g_zoom.pz_get_instance = g_zoom.class_get_method(pinch, "get_Instance", 0);
+    g_zoom.pz_set_zoom = g_zoom.class_get_method(pinch, "SetZoomLevel", 1);
+    if (!g_zoom.get_options || !g_zoom.get_desired || !g_zoom.set_desired ||
+        !g_zoom.pz_get_instance || !g_zoom.pz_set_zoom) {
+        fprintf(stderr, "[sdv-zoom] membros nao encontrados\n");
+        return 0;
+    }
+    g_zoom.state = 1;
+    fprintf(stderr, "[sdv-zoom] pronto (D-pad cima/baixo = zoom)\n");
+    return 1;
+}
+
+/* Ressincroniza o nosso valor com o do jogo. So' no INICIO de cada aperto: o
+ * getter e' um mono_runtime_invoke a mais, e o menu de opcoes/pinca pode ter
+ * mexido no zoom enquanto o D-pad estava solto. */
+static void sdv_zoom_begin(void) {
+    if (!sdv_zoom_init()) return;
+
+    void *exc = NULL;
+    void *opts = g_zoom.runtime_invoke(g_zoom.get_options, NULL, NULL, &exc);
+    if (exc || !opts) return;   /* jogo ainda no boot/titulo sem options */
+    exc = NULL;
+    void *boxed = g_zoom.runtime_invoke(g_zoom.get_desired, opts, NULL, &exc);
+    if (exc || !boxed) return;
+    float zoom = *(float *)g_zoom.object_unbox(boxed);
+    g_zoom.level = zoom > 0.0f ? zoom : 1.0f;
+}
+
+/* direction: +1 aproxima, -1 afasta.
+ *
+ * O input loop roda na thread principal, mas o Game1.Update/Draw roda na render
+ * worker. Cada mono_runtime_invoke daqui obriga o runtime a coordenar as duas
+ * threads, entao chamar isso a 125 Hz (todo tick de 8 ms) e' o que deixava o
+ * zoom instavel: a cada segundo segurando eram ~1100 invokes disputando com o
+ * game loop. Agora aplicamos no maximo 20x/s, partindo do valor que NOS mesmos
+ * escrevemos por ultimo (sem getter por aplicacao) — 2 invokes por aplicacao.
+ *
+ * Limites fixos, sem consultar o mapa da area atual: descobrir o piso real
+ * exigia mais 5 invokes por tick (currentLocation, IsOutdoors, Map,
+ * DisplayWidth, DisplayHeight) e era a maior fonte da instabilidade. */
+static void sdv_zoom_step(int direction, double now) {
+    static double last_apply;
+    if (g_zoom.state <= 0 || !(g_zoom.level > 0.0f)) return;
+    if (now - last_apply < SDV_ZOOM_PERIOD) return;
+    last_apply = now;
+
+    float zoom = g_zoom.level;
+    zoom *= direction > 0 ? SDV_ZOOM_STEP : 1.0f / SDV_ZOOM_STEP;
+    if (zoom > SDV_ZOOM_BASE_MAX) zoom = SDV_ZOOM_BASE_MAX;
+    if (zoom < SDV_ZOOM_BASE_MIN) zoom = SDV_ZOOM_BASE_MIN;
+    if (zoom == g_zoom.level) return;   /* ja' no batente: nao invoca nada */
+    g_zoom.level = zoom;
+
+    void *exc = NULL;
+    void *opts = g_zoom.runtime_invoke(g_zoom.get_options, NULL, NULL, &exc);
+    if (exc || !opts) return;
+
+    void *args[1] = { &zoom };
+    exc = NULL;
+    void *pinch = g_zoom.runtime_invoke(g_zoom.pz_get_instance, NULL, NULL,
+                                        &exc);
+    if (!exc && pinch) {
+        exc = NULL;
+        g_zoom.runtime_invoke(g_zoom.pz_set_zoom, pinch, args, &exc);
+    }
+    exc = NULL;
+    g_zoom.runtime_invoke(g_zoom.set_desired, opts, args, &exc);
+}
+
 typedef unsigned char (*sdv_key_callback_t)(void *, void *, int, void *);
 typedef unsigned char (*sdv_touch_callback_t)(void *, void *, void *, void *);
 
@@ -449,6 +597,11 @@ static void sdv_run_input_loop(void *env, void *view, void *down_handler,
     const char *cursor_env = getenv("SDV_RIGHT_CURSOR");
     int right_cursor_enabled = touch &&
         !(cursor_env && cursor_env[0] == '0');
+    /* D-pad = zoom (estilo Terraria); movimento fica no analogico esquerdo.
+     * SDV_DPAD_ZOOM=0 restaura o D-pad como movimento (comportamento antigo). */
+    const char *dpad_zoom_env = getenv("SDV_DPAD_ZOOM");
+    int dpad_zoom_enabled = !(dpad_zoom_env && dpad_zoom_env[0] == '0');
+    int zoom_prev_dir = 0;
     int test_key = getenv("SDV_TEST_KEY") ? atoi(getenv("SDV_TEST_KEY")) : 0;
     unsigned long test_at = getenv("SDV_TEST_KEY_DELAY")
         ? strtoul(getenv("SDV_TEST_KEY_DELAY"), NULL, 10) * 125ul : 0;
@@ -535,10 +688,28 @@ static void sdv_run_input_loop(void *env, void *view, void *down_handler,
                 _exit(0);
             }
 
-            if (SDV_SDL_BUTTON(11) || pad.left_y < -deadzone) logical |= SDV_KEY_UP;
-            if (SDV_SDL_BUTTON(12) || pad.left_y > deadzone)  logical |= SDV_KEY_DOWN;
-            if (SDV_SDL_BUTTON(13) || pad.left_x < -deadzone) logical |= SDV_KEY_LEFT;
-            if (SDV_SDL_BUTTON(14) || pad.left_x > deadzone)  logical |= SDV_KEY_RIGHT;
+            if (pad.left_y < -deadzone) logical |= SDV_KEY_UP;
+            if (pad.left_y > deadzone)  logical |= SDV_KEY_DOWN;
+            if (pad.left_x < -deadzone) logical |= SDV_KEY_LEFT;
+            if (pad.left_x > deadzone)  logical |= SDV_KEY_RIGHT;
+            if (dpad_zoom_enabled) {
+                int zoom_dir = 0;
+                if (SDV_SDL_BUTTON(11)) zoom_dir += 1;   /* cima = aproxima */
+                if (SDV_SDL_BUTTON(12)) zoom_dir -= 1;   /* baixo = afasta */
+                if (zoom_dir && !zoom_prev_dir) {
+                    fprintf(stderr, "[sdv-zoom] dpad %s\n",
+                            zoom_dir > 0 ? "zoom-in" : "zoom-out");
+                    sdv_zoom_begin();   /* le' o zoom atual uma unica vez */
+                }
+                if (zoom_dir) sdv_zoom_step(zoom_dir, now);
+                zoom_prev_dir = zoom_dir;
+                /* esquerda/direita do D-pad ficam reservados */
+            } else {
+                if (SDV_SDL_BUTTON(11)) logical |= SDV_KEY_UP;
+                if (SDV_SDL_BUTTON(12)) logical |= SDV_KEY_DOWN;
+                if (SDV_SDL_BUTTON(13)) logical |= SDV_KEY_LEFT;
+                if (SDV_SDL_BUTTON(14)) logical |= SDV_KEY_RIGHT;
+            }
             if (SDV_SDL_BUTTON(0)) logical |= SDV_KEY_ACTION;
             if (SDV_SDL_BUTTON(1)) logical |= SDV_KEY_CANCEL;
             if (SDV_SDL_BUTTON(2)) logical |= SDV_KEY_TOOL;

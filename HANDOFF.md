@@ -1,6 +1,6 @@
 # Stardew Valley (Android) — so-loader port — HANDOFF
 
-**Status em 2026-08-02:** release universal v1.1.3 preparada sobre a baseline validada no
+**Status em 2026-08-04:** release universal v1.1.4 preparada sobre a baseline validada no
 ArkOS/RK3326/Mali-G31 e na bancada original Amlogic/Mali-450. `Runtime_init`,
 ativação Xamarin, lifecycle nativo, GLES, OpenAL, controles, criação de personagem,
 save e gameplay funcionam. O teste atual carregou um save real, percorreu a lista
@@ -32,11 +32,36 @@ repetir, o próximo trace deve acrescentar tempo monotônico e amostragem de CPU
 Na v1.1.3, os arquivos visíveis em `ports/` e `ports_scripts/` viraram wrappers POSIX
 mínimos e idênticos; ambos executam em foreground o único runtime
 `ports/sdvnextos/run.sh`. Esse runtime resolve o diretório pela própria localização,
-impede instâncias duplicadas, migra/prepara os dados com NXExtract e escolhe o loader
-pelo firmware. Não usa `systemctl`, `setsid` nem perfil SDL/áudio fixo. O NextOS recebe
-o binário do sysroot atual (glibc 2.43 nesta release); ArkOS e outros CFWs externos
-recebem o build compatível (artefato atual GLIBC máx. 2.17). A saída continua no
-binário por `SELECT+START -> _exit(0)`.
+migra/prepara os dados com NXExtract e escolhe o loader pelo firmware. Não usa
+`systemctl`, `setsid` nem perfil SDL/áudio fixo. O NextOS recebe o binário do sysroot
+atual (glibc 2.43 nesta release); ArkOS e outros CFWs externos recebem o build
+compatível (artefato atual GLIBC máx. 2.17). A saída continua no binário por
+`SELECT+START -> _exit(0)`.
+
+Na v1.1.4 esse runtime caiu de 305 para 110 linhas. Saíram a trava de lançamento, o
+matador de instância anterior e todo o ciclo ES/TTY/`pm_finish`: no ArkOS o próprio
+EmulationStation lança o port com
+`sudo perfmax %GOVERNOR% %ROM%; nice -n -19 /usr/local/bin/AltSDL.sh %ROM%; sudo perfnorm`
+e nunca é morto, então esse trabalho era duplicado. O handoff `pm_platform_helper`
+continua sendo chamado, preservando os CFWs cujo `control.txt` faz mais que o do ArkOS.
+A remoção corrige uma falha real: o antigo `stop_existing_game` matava qualquer processo
+cujo executável casasse `*/ports/sdvnextos/stardewvalley*`, de modo que um segundo
+lançamento derrubava com `SIGKILL` uma sessão já em gameplay — assinatura visível no log
+como três `Killed` seguidos, incluindo subshells do `funcs.txt` do PortMaster.
+
+**Perfil de memória medido no ArkOS (RG351MP/R36S, 639 MB, ES parado, 2026-08-04.)**
+A pausa sem explicação do trace anterior foi instrumentada com relógio de parede e
+amostragem por thread. Não há OOM: nenhum `Killed process` em `/var/log/dmesg*`, e
+`MemAvailable` nunca ficou crítico. O jogo renderiza 60 fps cravados (600 frames a cada
+10 s) e o RSS evolui assim: ~280 MB no título, ~380 MB ao iniciar o carregamento do
+mundo, **pico de 534 MB** e estabilização em ~517 MB já em gameplay, com 11.100 frames
+em 304 s. Ou seja, a folga real num aparelho de 640 MB é de dezenas de MB, não centenas.
+Detalhe operacional: com `vm.swappiness=60` o zram de 512 MB ficou **inteiramente sem
+uso** (`SwapFree` intacto) mesmo com `MemFree` em 5 MB — o kernel preferiu descartar page
+cache. Quem quiser que o zram absorva o pico precisa subir `vm.swappiness` e zerar
+`vm.page-cluster`. Aviso para o próximo trace: um contador de tempo que some apenas o
+`sleep` do amostrador subestima o tempo real quando cada iteração varre `/proc`, e isso
+faz um `timeout` do próprio teste parecer morte do jogo.
 
 Os dados proprietários são BYO-data. NXExtract 1.1.2 aceita APK/APKM/APKS/XAPK/ZIP,
 valida a árvore exata e confirma `libs`/`assets` transacionalmente. O hook portátil

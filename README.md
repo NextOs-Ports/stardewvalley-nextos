@@ -23,6 +23,36 @@ minutes). APK, APKM, APKS, XAPK and bundle ZIP inputs are accepted.
 
 **Exit the game: SELECT + START.**
 
+## v1.1.4 — real-time zoom on the D-pad and a launcher that stays out of the way
+
+- **Zoom while you play**: hold **D-pad Up** to move the camera in, **D-pad Down** to
+  move it out, between 0.40× and 2.5× (~2.1× per second). Stardew's mobile zoom is the
+  pinch gesture, which a handheld cannot produce; this drives the same managed state the
+  pinch would, so the game itself resizes viewport, render target and lightmap.
+- The zoom is applied at most 20× per second from a cached value instead of on every
+  8 ms input tick. The input loop runs on the main thread while the game updates and
+  draws on its render worker, so every managed call has to coordinate the two: the old
+  rate was ~1125 calls per second competing with the game loop, and it is now ~40.
+- Movement and menu navigation are unchanged — the left stick still drives them, including
+  the native scrolling of the final Options tab.
+- **The launcher no longer manages the frontend.** `run.sh` went from 305 to 110 lines:
+  the launch lock, the old-instance killer and the ES/TTY/`pm_finish` handling are gone,
+  because PortMaster and each CFW's own port runner already do exactly that. The
+  PortMaster handoff itself (`pm_platform_helper`) is still called, so nothing changes on
+  muOS, ROCKNIX or Knulli.
+- That removal fixes a real failure: the old `stop_existing_game` killed **any** process
+  whose executable matched `*/ports/sdvnextos/stardewvalley*`, so a second launch could
+  `SIGKILL` a session that was already in gameplay.
+- Installing over v1.1.3 does not re-extract data or touch saves.
+
+**Em português:** o zoom em tempo real chega ao D-pad (cima aproxima, baixo afasta, de
+0.40× a 2.5×), aplicado no máximo 20 vezes por segundo para não disputar com o loop do
+jogo. Andar e navegar em menus não mudam: continuam no analógico esquerdo, inclusive a
+rolagem nativa da última aba das Opções. O `run.sh` caiu de 305 para 110 linhas — saiu
+tudo que mexia no frontend, porque o PortMaster e o lançador de ports de cada CFW já
+fazem isso —, e isso corrige um caso real em que um segundo lançamento matava a partida
+em andamento. Instala por cima da v1.1.3 sem refazer dados nem tocar em saves.
+
 ## v1.1.3 — standard thin PortMaster launcher
 
 - The visible entries in `ports/` and `ports_scripts/` are now identical 21-line POSIX
@@ -201,9 +231,12 @@ runtime.
 
 ### Controls
 
-- Movement/menus: D-pad and left stick through the native Android/MonoGame path.
-- In long menus such as the final Options tab, D-pad navigation scrolls the
+- Movement/menus: left stick through the native Android/MonoGame path.
+- In long menus such as the final Options tab, left-stick navigation scrolls the
   page natively and respects its top and bottom limits.
+- **D-pad Up/Down**: real-time camera zoom (0.40×–2.5×, ~2.1× per second while held).
+  Set `SDV_DPAD_ZOOM=0` to give the whole D-pad back to movement and menus, exactly as
+  in v1.1.3.
 - A/B/X/Y, L1/R1/L2/R2, Start and Select follow the SDL GameController mapping.
 - **Right stick**: independent native pixel-art arrow cursor (radial deadzone + acceleration,
   auto-hides after 2 s). Does not steal the game's native focus.
@@ -402,9 +435,12 @@ de GLES, formato do backbuffer e backend de áudio são todos negociados em runt
 
 ### Controles
 
-- Movimento/menus: D-pad e analógico esquerdo pelo caminho nativo Android/MonoGame.
-- Em menus longos, como a última aba das Opções, o D-pad rola a página
-  nativamente e respeitam os limites superior e inferior.
+- Movimento/menus: analógico esquerdo pelo caminho nativo Android/MonoGame.
+- Em menus longos, como a última aba das Opções, o analógico esquerdo rola a página
+  nativamente e respeita os limites superior e inferior.
+- **D-pad cima/baixo**: zoom da câmera em tempo real (0.40×–2.5×, ~2.1× por segundo
+  enquanto segurado). Com `SDV_DPAD_ZOOM=0` o D-pad inteiro volta a ser movimento e
+  menus, igual à v1.1.3.
 - A/B/X/Y, L1/R1/L2/R2, Start e Select seguem o mapeamento SDL GameController.
 - **Analógico direito**: cursor de seta pixel-art nativo e independente (deadzone radial +
   aceleração, some sozinho após 2 s). Não rouba o foco nativo do jogo.
