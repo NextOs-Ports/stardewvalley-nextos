@@ -23,6 +23,46 @@ minutes). APK, APKM, APKS, XAPK and bundle ZIP inputs are accepted.
 
 **Exit the game: SELECT + START.**
 
+## v1.1.6 — muOS / RG 40XX-H launch fix, and no more silent failures
+
+A muOS reporter on an RG 40XX-H installed v1.1.5 and **nothing happened**: the port
+returned to the menu and produced **no log file at all**. That "no log" is the whole
+diagnosis — two separate blind spots, both now closed.
+
+- **The visible launcher could not find the runtime.** Since v1.1.3 the menu entry is a
+  thin wrapper that has to locate `ports/sdvnextos/run.sh` through a fixed list of ROM
+  roots. That list covered `/roms`, `/roms2` and `/storage/roms` — not muOS layouts under
+  `/mnt/mmc` and `/mnt/sdcard`. It also derived its directory from `$0` without resolving
+  symlinks, so a frontend-created link pointed the search at the wrong place. The wrapper
+  now resolves its real path first, searches relative to itself, and covers the muOS,
+  batocera/userdata and deeper `ports/` layouts.
+- **Failure was silent.** The wrapper reported "run.sh not found" on stderr, which the
+  frontend discards. It now also writes `stardew-launcher-error.log` next to itself (or in
+  `TMPDIR`), including the resolved script path, so there is always something to report.
+- **The runtime opens its log before anything else.** Until v1.1.5 `debug.log` was created
+  only after the CFW's `control.txt` had been sourced, so any failure in that window
+  vanished. The log is now the first thing that happens, with a `TMPDIR` fallback when the
+  game directory is not writable.
+- **The game is supervised again, not `exec`ed.** v1.1.5 replaced the launcher process with
+  `exec "$BIN"`; the project's launcher standard requires the launcher to stay alive, own
+  the exact PID and return only after the game. The exit status is now logged too.
+- Two new regression tests: a wrapper reached through a symlink must still resolve the real
+  runtime, and a missing runtime must never fail without writing a log. Both fail against
+  v1.1.5.
+
+Note that muOS was last physically confirmed on **v1.1.1**, when the menu entry was still
+the complete launcher and needed no lookup at all. v1.1.2 and v1.1.3 were never validated on
+that hardware.
+
+**Em português:** um relato no muOS/RG 40XX-H mostrou o port voltando ao menu **sem gerar
+log nenhum**. Eram dois pontos cegos: o wrapper visível não encontrava o
+`ports/sdvnextos/run.sh` (a lista de raízes não cobria `/mnt/mmc` e `/mnt/sdcard` do muOS, e
+o caminho não resolvia symlink) e, ao falhar, escrevia só em stderr — que o frontend
+descarta. Agora o wrapper resolve o próprio caminho real, procura em muito mais layouts e
+**sempre grava um arquivo de erro**. O `run.sh` também abre o log antes de qualquer outra
+coisa, e o jogo volta a ser supervisionado em vez de `exec`. O muOS tinha confirmação
+física apenas na v1.1.1.
+
 ## v1.1.5 — first-install fix for v1.1.4
 
 v1.1.4 trimmed the launcher and, in doing so, shortened the `chmod +x` list to the two

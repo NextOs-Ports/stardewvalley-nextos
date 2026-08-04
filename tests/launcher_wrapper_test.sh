@@ -42,4 +42,33 @@ do
   [ "$output" = "$expected" ] || fail "target or arguments were wrong for $entry"
 done
 
+# Regressao v1.1.5 (muOS/RG 40XX-H): o arquivo visivel pode ser um symlink criado
+# pelo frontend. Se `dirname $0` nao resolver o alvo real, o wrapper procura o
+# run.sh no diretorio errado e o port nunca inicia.
+LINK_DIR="$TMP_ROOT/atalhos"
+mkdir -p "$LINK_DIR"
+ln -sf "$ROM_ROOT/ports/Stardew Valley (NextOS).sh" "$LINK_DIR/Stardew.sh"
+set +e
+output=$(cd / && sh "$LINK_DIR/Stardew.sh" 'first argument' second)
+status=$?
+set -e
+[ "$status" -eq 37 ] ||
+  fail "wrapper reached through a symlink did not resolve the real runtime"
+expected=$(printf '%s\n' \
+  "$ROM_ROOT/ports/sdvnextos/run.sh" 2 'first argument' second)
+[ "$output" = "$expected" ] || fail "symlinked wrapper resolved the wrong target"
+
+# E quando o runtime realmente nao existe, o wrapper NAO pode falhar em silencio:
+# o frontend descarta stderr, entao sem arquivo em disco nao ha o que reportar.
+LOST_ROOT="$TMP_ROOT/sem-runtime"
+mkdir -p "$LOST_ROOT"
+cp -- "$REPO/arkos/Stardew Valley (NextOS).sh" "$LOST_ROOT/Stardew Valley (NextOS).sh"
+set +e
+( cd / && TMPDIR="$LOST_ROOT" sh "$LOST_ROOT/Stardew Valley (NextOS).sh" ) >/dev/null 2>&1
+status=$?
+set -e
+[ "$status" -eq 1 ] || fail "missing runtime should exit 1"
+[ -s "$LOST_ROOT/stardew-launcher-error.log" ] ||
+  fail "wrapper failed silently: no error log was written to disk"
+
 printf 'launcher wrapper tests: PASS\n'

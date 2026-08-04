@@ -1,4 +1,4 @@
-# Stardew Valley v1.1.5 — instalação multi-device
+# Stardew Valley v1.1.6 — instalação multi-device
 
 So-loader próprio que roda o **Stardew Valley de Android** (Mono/.NET 8 AOT + MonoGame)
 direto no Linux do handheld, sem Android e sem container.

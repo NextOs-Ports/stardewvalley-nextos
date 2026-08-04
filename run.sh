@@ -16,7 +16,29 @@
 
 GAMEDIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P) ||
   exit 1
-cd "$GAMEDIR" || exit 1
+
+# O LOG VEM ANTES DE TUDO. Ate' a v1.1.5 o redirecionamento acontecia depois de
+# carregar o control.txt do CFW, entao qualquer falha nesse trecho — ou dentro do
+# proprio PortMaster — sumia sem deixar rastro: o port voltava ao menu sem gerar
+# arquivo nenhum, que foi exatamente o relato do muOS/RG 40XX-H na v1.1.5.
+# Se o diretorio do jogo nao aceitar escrita, cai para /tmp em vez de morrer:
+# um log no lugar errado ainda e' infinitamente melhor que nenhum log.
+if [ -s "$GAMEDIR/debug.log" ]; then
+  mv -f -- "$GAMEDIR/debug.log" "$GAMEDIR/debug.prev.log" 2>/dev/null
+fi
+if : > "$GAMEDIR/debug.log" 2>/dev/null; then
+  SDV_LOG=$GAMEDIR/debug.log
+else
+  SDV_LOG=${TMPDIR:-/tmp}/stardewvalley-debug.log
+fi
+exec >> "$SDV_LOG" 2>&1
+printf '=== Stardew Valley (NextOS) | release %s | %s ===\n' \
+  "$(tr -d '\r\n' < "$GAMEDIR/version.txt" 2>/dev/null || echo unknown)" \
+  "$(date -Is 2>/dev/null || date)"
+printf '[launcher] gamedir=%s log=%s shell=%s\n' \
+  "$GAMEDIR" "$SDV_LOG" "${BASH_VERSION:-?}"
+
+cd "$GAMEDIR" || { printf '[launcher] nao consegui entrar em %s\n' "$GAMEDIR"; exit 1; }
 
 XDG_DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
 for _cf in /opt/system/Tools/PortMaster /opt/tools/PortMaster \
@@ -37,15 +59,8 @@ if [ -f "$controlfolder/control.txt" ]; then
 fi
 : "${ESUDO:=}"
 : "${CUR_TTY:=/dev/tty0}"
-
-# Sem terminal na mao do usuario, todo erro vira "tela preta": o log e' a unica
-# forma de diagnosticar um lancamento pelo menu.
-[ -s "$GAMEDIR/debug.log" ] &&
-  mv -f -- "$GAMEDIR/debug.log" "$GAMEDIR/debug.prev.log"
-exec > "$GAMEDIR/debug.log" 2>&1
-printf '=== Stardew Valley (NextOS) | release %s | %s ===\n' \
-  "$(tr -d '\r\n' < "$GAMEDIR/version.txt" 2>/dev/null || echo unknown)" \
-  "$(date -Is 2>/dev/null || date)"
+printf '[launcher] cfw=%s controlfolder=%s esudo=%s\n' \
+  "${CFW_NAME:-nenhum}" "$controlfolder" "${ESUDO:-nenhum}"
 
 launcher_error() { printf 'Stardew Valley: %s\n' "$*" >&2; exit 1; }
 
@@ -138,4 +153,11 @@ if command -v pm_platform_helper >/dev/null 2>&1; then
   pm_platform_helper "$BIN" >/dev/null 2>&1 || true
 fi
 
-exec "$BIN"
+# Foreground significa OWNERSHIP: o launcher continua vivo, dono do PID exato, e
+# so' retorna depois do jogo. A v1.1.5 usava `exec "$BIN"`, que substitui o shell
+# — o frontend perde o dono do processo e nada pode ser registrado depois da
+# saida. Este e' o padrao aprovado do projeto (launcher-portmaster.md secao 5).
+"$BIN"
+status=$?
+printf '[launcher] jogo terminou com status %s\n' "$status"
+exit "$status"

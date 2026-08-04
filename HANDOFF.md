@@ -1,6 +1,6 @@
 # Stardew Valley (Android) — so-loader port — HANDOFF
 
-**Status em 2026-08-04:** release universal v1.1.5 preparada sobre a baseline validada no
+**Status em 2026-08-04:** release universal v1.1.6 preparada sobre a baseline validada no
 ArkOS/RK3326/Mali-G31 e na bancada original Amlogic/Mali-450. `Runtime_init`,
 ativação Xamarin, lifecycle nativo, GLES, OpenAL, controles, criação de personagem,
 save e gameplay funcionam. O teste atual carregou um save real, percorreu a lista
@@ -60,6 +60,25 @@ Armadilha de bancada que escondeu isso: o `/roms` do ArkOS de teste é **exfat c
 `fmask=0000`**, então todo arquivo é sempre 0777 e `chmod` não tem efeito observável —
 qualquer teste de permissão feito só ali dá falso positivo. O
 `tests/launcher_permissions_test.sh` cobre isso em ext4 e falha contra a v1.1.4.
+
+**Regressão de lançamento no muOS/RG 40XX-H, corrigida na v1.1.6.** Relato: v1.1.5
+instalada, o port volta ao menu e **nenhum arquivo de log é gerado**. "Sem log" localiza a
+falha antes do redirecionamento do `run.sh` — e havia dois pontos cegos somados. Primeiro,
+o wrapper visível fino (introduzido na v1.1.3) precisa *encontrar* `ports/sdvnextos/run.sh`
+numa lista fixa de raízes que cobria `/roms`, `/roms2` e `/storage/roms`, mas não os
+layouts do muOS em `/mnt/mmc` e `/mnt/sdcard`; além disso derivava o diretório de `$0` sem
+resolver symlink. Segundo, ao não encontrar, ele escrevia apenas em stderr — que o frontend
+descarta —, então o modo de falha era silêncio absoluto. Agora o wrapper resolve o próprio
+caminho real, procura relativo a si mesmo e em muito mais layouts, e **sempre grava
+`stardew-launcher-error.log`** em disco. O `run.sh` passou a abrir o log como primeira ação,
+com fallback para `TMPDIR`, e voltou a **supervisionar** o jogo (`"$BIN"; status=$?`) em vez
+do `exec "$BIN"` da v1.1.5, conforme a seção 5 de `launcher-portmaster.md`.
+
+Ponto importante de prova: o muOS tinha confirmação física apenas na **v1.1.1**, quando o
+arquivo visível ainda era o launcher completo e não precisava procurar nada. As v1.1.2 e
+v1.1.3 nunca foram validadas nesse hardware, então a regressão de layout passou três
+releases sem aparecer. `tests/launcher_wrapper_test.sh` agora cobre wrapper alcançado por
+symlink e falha nunca-silenciosa; ambos falham contra a v1.1.5.
 
 **Perfil de memória medido no ArkOS (RG351MP/R36S, 639 MB, ES parado, 2026-08-04.)**
 A pausa sem explicação do trace anterior foi instrumentada com relógio de parede e
