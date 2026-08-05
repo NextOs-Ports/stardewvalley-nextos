@@ -40,8 +40,11 @@ CONTROLLER_V1_ASSEMBLY_SHA256 = (
 PREVIOUS_FINAL_ASSEMBLY_SHA256 = (
     "d7749b430a36df08c353d3acae2d532070e771caa9baf43e6df08d07f0ffe417"
 )
-FINAL_ASSEMBLY_SHA256 = (
+RELEASE_116_ASSEMBLY_SHA256 = (
     "484633c3a22a72b25be9f6cff603ed67a7f7f154f9ce3b7a36df94792eaccd8b"
+)
+FINAL_ASSEMBLY_SHA256 = (
+    "c51dd147461ff4e594ad2251491c2eb34ff0851f7db87bbeccef276d46d0b31f"
 )
 
 XABA_MAGIC = b"XABA"
@@ -189,6 +192,23 @@ PATCH_REGIONS = (
             PREVIOUS_FINAL_ASSEMBLY_SHA256: bytes.fromhex("220000803f7dc31e0004"),
         },
     ),
+    # Game1.UpdateControlInput, mobile hold-to-repeat: the gamepad X-held
+    # branch re-fires pressUseToolButton every tick with no time gate, so an
+    # empty hand near furniture toggles pick-up/place ("turbo"). The guard
+    # only skipped MeleeWeapon; brfalse.s on CurrentTool arms the repeat for
+    # equipped tools only.  75d5040002 2d03 (isinst MeleeWeapon; brtrue.s)
+    # -> 2c08 (brfalse.s) + 5 nops; ldc.i4.1/stloc.s untouched.
+    (
+        0x2289A8,
+        bytes.fromhex("2c080000000000"),
+        {
+            ORIGINAL_ASSEMBLY_SHA256: bytes.fromhex("75d50400022d03"),
+            LEGACY_PATCHED_ASSEMBLY_SHA256: bytes.fromhex("75d50400022d03"),
+            CONTROLLER_V1_ASSEMBLY_SHA256: bytes.fromhex("75d50400022d03"),
+            PREVIOUS_FINAL_ASSEMBLY_SHA256: bytes.fromhex("75d50400022d03"),
+            RELEASE_116_ASSEMBLY_SHA256: bytes.fromhex("75d50400022d03"),
+        },
+    ),
 )
 
 
@@ -314,7 +334,10 @@ def strip_debug_directory(image, source_hash):
     debug_rva, debug_size = struct.unpack_from("<II", image, directory)
     if not debug_rva:
         expected = bytes(known_data_size)
-        if source_hash == PREVIOUS_FINAL_ASSEMBLY_SHA256:
+        if source_hash in (
+            PREVIOUS_FINAL_ASSEMBLY_SHA256,
+            RELEASE_116_ASSEMBLY_SHA256,
+        ):
             controller_code = bytes.fromhex(
                 "b6027535070002252c0b03172e1003182e14262b0126020328946100062a1f64"
                 "6fa36300062a1f9c6fa36300062a"
@@ -358,13 +381,16 @@ def patch_assembly(assembly):
         LEGACY_PATCHED_ASSEMBLY_SHA256,
         CONTROLLER_V1_ASSEMBLY_SHA256,
         PREVIOUS_FINAL_ASSEMBLY_SHA256,
+        RELEASE_116_ASSEMBLY_SHA256,
     ):
         fail("unsupported StardewValley.dll SHA-256 " + source_hash)
 
     output = bytearray(assembly)
     strip_debug_directory(output, source_hash)
     for offset, replacement, expected_by_hash in PATCH_REGIONS:
-        expected = expected_by_hash[source_hash]
+        # A source state missing from the map already carries the final bytes
+        # for that region (RELEASE_116 shipped every earlier patch verbatim).
+        expected = expected_by_hash.get(source_hash, replacement)
         if output[offset : offset + len(expected)] != expected:
             fail("assembly patch precondition failed at 0x%x" % offset)
         if len(replacement) != len(expected):
@@ -406,6 +432,7 @@ def prepare_store(store_bytes):
         LEGACY_PATCHED_ASSEMBLY_SHA256,
         CONTROLLER_V1_ASSEMBLY_SHA256,
         PREVIOUS_FINAL_ASSEMBLY_SHA256,
+        RELEASE_116_ASSEMBLY_SHA256,
         FINAL_ASSEMBLY_SHA256,
     }
     match = None
