@@ -140,6 +140,50 @@ PY
 python3 "$STAGE/ports/sdvnextos/nxextract.py" recipe-check \
   --recipe "$STAGE/ports/sdvnextos/extractor.json" >/dev/null
 
+# The extractor recipe pins the SHA-256 of the .stardew-data.json marker that
+# prepare_stardew_data.py writes.  Recompute the marker from the shipped
+# script and refuse to package a recipe whose pins drifted (the v1.1.7
+# regression: script updated, recipe pins left behind).
+python3 -B - "$STAGE/ports/sdvnextos" <<'PY'
+import hashlib
+import importlib.util
+import json
+import os
+import sys
+
+root = sys.argv[1]
+spec = importlib.util.spec_from_file_location(
+    "prepare_stardew_data",
+    os.path.join(root, "tools", "prepare_stardew_data.py"),
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+marker = module.marker_bytes()
+digest = hashlib.sha256(marker).hexdigest()
+
+with open(os.path.join(root, "extractor.json"), "rb") as stream:
+    recipe = json.load(stream)
+pins = [
+    check
+    for hook in recipe.get("hooks", ())
+    for check in hook.get("checkpoint", ())
+    if check.get("path") == module.DATA_MARKER
+]
+pins.extend(
+    check
+    for check in recipe.get("validate", ())
+    if check.get("path") == module.DATA_MARKER
+)
+if not pins:
+    raise SystemExit("extractor.json no longer validates the data marker")
+for check in pins:
+    if check.get("sha256") != digest or check.get("size") != len(marker):
+        raise SystemExit(
+            "extractor.json pins a stale data marker: expected %d bytes %s"
+            % (len(marker), digest)
+        )
+PY
+
 if grep -En '^[[:space:]]*(export[[:space:]]+)?SDL_(VIDEO|AUDIO)DRIVER=' \
     "$STAGE/ports/$LAUNCHER" \
     "$STAGE/ports/sdvnextos/run.sh" \

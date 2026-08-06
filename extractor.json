@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "stardewvalley-nextos",
-  "version": "1.6.15.3-controller-5",
+  "version": "1.6.15.3-controller-6",
   "title": "STARDEW VALLEY",
   "abi_order": [
     "arm64-v8a"
@@ -87,13 +87,14 @@
           "path": ".stardew-data.json",
           "type": "file",
           "size": 208,
-          "sha256": "6d0ed281ff34cff5c90fec00c86d10e3eb992e16cec1de1898d3b3693c66dc64",
+          "sha256": "054b2316665ce1c0842b1705b1bb60c2829a1fd6f6e09bc6e0ce6c724faba5c5",
           "magic_ascii": "{"
         },
         {
           "path": "libs/libassemblies.arm64-v8a.blob.so",
           "type": "file",
-          "size": 7127232,
+          "min_size": 4194304,
+          "max_size": 67108864,
           "magic_hex": "7f454c46",
           "elf_machine": "arm64-v8a"
         }
@@ -105,7 +106,7 @@
       "path": ".stardew-data.json",
       "type": "file",
       "size": 208,
-      "sha256": "6d0ed281ff34cff5c90fec00c86d10e3eb992e16cec1de1898d3b3693c66dc64",
+      "sha256": "054b2316665ce1c0842b1705b1bb60c2829a1fd6f6e09bc6e0ce6c724faba5c5",
       "magic_ascii": "{"
     }
   ],
