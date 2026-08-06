@@ -414,14 +414,6 @@ the BSD 2-Clause licence in `licenses/LZ4-BSD-2-Clause.txt`. Stardew Valley, its
 assemblies and every asset remain the property of ConcernedApe / Chucklefish and are
 supplied only by the user, from their own legal copy.
 
-### Support this work
-
-- 💗 **GitHub Sponsors**: [github.com/sponsors/NextOs-Ports](https://github.com/sponsors/NextOs-Ports)
-- ☕ **Ko-fi**: [ko-fi.com/nextos](https://ko-fi.com/nextos)
-- 🇧🇷 **PIX**: [livepix.gg/nextos](https://livepix.gg/nextos)
-
----
-
 ## Português
 
 ### Estado
@@ -615,9 +607,3 @@ mesmos termos. O runtime LZ4 incluído usa BSD 2-Clause, reproduzida em
 `licenses/LZ4-BSD-2-Clause.txt`. Stardew Valley, seus assemblies e todos os assets
 continuam sendo da ConcernedApe / Chucklefish e são fornecidos apenas pelo usuário, da
 sua própria cópia legal.
-
-### Apoie este trabalho
-
-- 💗 **GitHub Sponsors**: [github.com/sponsors/NextOs-Ports](https://github.com/sponsors/NextOs-Ports)
-- ☕ **Ko-fi**: [ko-fi.com/nextos](https://ko-fi.com/nextos)
-- 🇧🇷 **PIX**: [livepix.gg/nextos](https://livepix.gg/nextos)
